@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --surface: #f7f8fa;
+  --foreground: #1b2a4a;
+  --muted: #5a6980;
+  --border: #e3e7ee;
+  --brand: #0d9488;
+  --brand-soft: #ccfbf1;
+  --accent: #f59e0b;
+  --accent-soft: #fef3c7;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-soft: var(--brand-soft);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fadeInUp 450ms cubic-bezier(.2,.8,.2,1) both; }
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .6; }
+}
+.animate-pulse-soft { animation: pulseSoft 1.4s ease-in-out infinite; }
+
+@keyframes typeIn {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+.animate-type-in { animation: typeIn 900ms steps(40) both; }
+
+@keyframes blink { 50% { opacity: 0; } }
+.caret::after { content: "▍"; margin-left: 2px; animation: blink 1s steps(1) infinite; color: var(--brand); }
+
+.scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
