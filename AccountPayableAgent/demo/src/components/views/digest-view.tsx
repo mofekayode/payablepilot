@@ -1,5 +1,5 @@
 "use client";
-import { Check, AlertTriangle, ShieldCheck, Clock, Ban, Inbox, FileSignature } from "lucide-react";
+import { Check, AlertTriangle, ShieldCheck, Ban, Inbox, FileSignature } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Badge, Button, Card, CardBody, CardHeader } from "../primitives";
 import { money, cn } from "@/lib/utils";
@@ -46,12 +46,11 @@ export function DigestView() {
         )}
       </div>
 
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <Stat icon={<Inbox className="w-4 h-4" />} label="Processed" value={String(processed)} sub="so far today" />
         <Stat icon={<Check className="w-4 h-4 text-brand" />} label="Matched & ready" value={String(matched.length)} sub={money(matchedTotal)} tone="brand" />
         <Stat icon={<AlertTriangle className="w-4 h-4 text-accent" />} label="Discrepancies" value={String(flagged.length)} sub="awaiting review" tone="accent" />
         <Stat icon={<Ban className="w-4 h-4 text-danger" />} label="Duplicates blocked" value={String(dupes.length)} sub="no double payment" tone="danger" />
-        <Stat icon={<Clock className="w-4 h-4" />} label="Paid today" value={String(paid.length)} sub={money(paid.reduce((s, i) => s + i.total, 0))} />
       </div>
 
       <div className="grid grid-cols-3 gap-5">

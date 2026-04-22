@@ -16,7 +16,8 @@ import { money, cn } from "@/lib/utils";
 type Role = "user" | "agent";
 type Message = { role: Role; text: string; suggestions?: string[]; at: string };
 
-type AgentResult = { text: string; steps: string[]; suggestions?: string[] };
+type PendingPrompt = "prioritize-overdue" | null;
+type AgentResult = { text: string; steps: string[]; suggestions?: string[]; pending?: PendingPrompt };
 
 type VendorKey = keyof typeof vendors;
 
@@ -43,7 +44,7 @@ function nowStamp() {
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 }
 
-type StoreSnapshot = { invoices: Invoice[] };
+type StoreSnapshot = { invoices: Invoice[]; pending?: PendingPrompt };
 
 function welcomeText(state: StoreSnapshot): string {
   const matched = state.invoices.filter((i) => i.status === "matched");
@@ -78,7 +79,35 @@ function humanList(items: string[]): string {
 
 function answer(q: string, state: StoreSnapshot): AgentResult {
   const l = q.toLowerCase();
+  const trimmed = l.trim();
   const vendor = detectVendor(l);
+
+  // Follow-up: user was asked whether to prioritize the overdue invoice or let the full batch flow.
+  if (state.pending === "prioritize-overdue") {
+    const affirmative = /^(yes|yeah|yep|yup|sure|ok|okay|please|do it|go ahead|sounds good|prioritize|priority|overdue)/.test(trimmed);
+    const negative = /^(no|nope|let it|full batch|batch|flow|normal|standard|don'?t|leave it)/.test(trimmed);
+
+    if (affirmative) {
+      return {
+        steps: ["bumping the overdue invoice to the front", "re-sequencing the batch", "queueing for your approval"],
+        text: `Done. I've moved the overdue invoice to the front of today's batch and pushed it to QuickBooks. It's sitting in your approval queue — release the batch and it'll go out first, then the rest in order.`,
+        suggestions: ["What else needs my approval today?", "Any other vendors overdue?"],
+      };
+    }
+    if (negative) {
+      return {
+        steps: ["keeping standard batch order", "no reshuffle needed"],
+        text: `Got it — batch stays in its usual order, queued in QuickBooks and waiting on your release. The overdue one still goes out in today's run, just not jumped to the front.`,
+        suggestions: ["What else needs my approval today?", "Show me the full batch"],
+      };
+    }
+    // Couldn't tell — ask again but keep context open.
+    return {
+      steps: ["not quite sure what you meant"],
+      text: `Want me to **prioritize the overdue invoice** (pay it first), or **let the full matched batch** flow through in the usual order?`,
+      pending: "prioritize-overdue",
+    };
+  }
 
   // Owed to vendor
   if (vendor && /(owe|outstanding|unpaid|open|owed|balance)/.test(l)) {
@@ -113,10 +142,9 @@ function answer(q: string, state: StoreSnapshot): AgentResult {
 
     if (overdue.length > 0) {
       text += `\n\nWant me to prioritize the overdue one, or let the full batch flow through?`;
-    } else {
-      text += `\n\nNothing urgent. You're clean on this one.`;
+      return { steps, text, pending: "prioritize-overdue" };
     }
-
+    text += `\n\nNothing urgent. You're clean on this one.`;
     return { steps, text };
   }
 
@@ -337,6 +365,7 @@ export function ChatBar() {
 
   const [messages, setMessages] = useState<Message[]>([welcome]);
   const [input, setInput] = useState("");
+  const [pending, setPending] = useState<PendingPrompt>(null);
   const [working, setWorking] = useState<{ steps: string[]; index: number } | null>(null);
   const [streaming, setStreaming] = useState<{ full: string; shown: string; suggestions?: string[]; at: string } | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -357,7 +386,8 @@ export function ChatBar() {
     setMessages((prev) => [...prev, { role: "user", text, at: nowStamp() }]);
     setInput("");
 
-    const result = answer(text, { invoices });
+    const result = answer(text, { invoices, pending });
+    setPending(result.pending ?? null);
 
     // Play checking steps
     for (let i = 0; i < result.steps.length; i++) {

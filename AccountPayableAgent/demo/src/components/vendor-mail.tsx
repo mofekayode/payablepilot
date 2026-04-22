@@ -43,8 +43,9 @@ import { publishDemo, subscribeDemo } from "@/lib/demo-channel";
 import { cn, money } from "@/lib/utils";
 import { invoices as seedInvoices, vendors } from "@/lib/app-data";
 
-type AccountKey = "summit" | "reliable" | "erin";
-type VendorKey = Exclude<AccountKey, "erin">;
+type AccountKey = "summit" | "reliable" | "erin" | "ap";
+type VendorKey = Extract<AccountKey, "summit" | "reliable">;
+type InboxAccountKey = Extract<AccountKey, "erin" | "ap">;
 
 type VendorDraft = {
   key: VendorKey;
@@ -71,18 +72,21 @@ type InboxEmail = {
   body: string;
   receivedAt: string;
   receivedAgo: string;
-  ctaLabel: string;
-  ctaHref: string;
+  ctaLabel?: string;
+  ctaHref?: string;
   ctaHint?: string;
   unread?: boolean;
   starred?: boolean;
   pinned?: boolean;
+  isFiller?: boolean;
+  avatar?: { initials: string; color: string };
 };
 
 const ACCOUNTS: Record<AccountKey, { name: string; email: string; initials: string; color: string }> = {
   summit: { name: "Summit Plumbing", email: "billing@summitplumbing.com", initials: "SP", color: "#1a73e8" },
   reliable: { name: "Reliable Landscaping", email: "accounts@reliablelandscaping.com", initials: "RL", color: "#188038" },
   erin: { name: "Erin Boyd · Greenfield PM", email: "erin@greenfieldpm.com", initials: "EB", color: "#d93025" },
+  ap: { name: "AP Inbox · Greenfield PM", email: "ap@greenfieldpm.com", initials: "AP", color: "#5f6368" },
 };
 
 const DRAFTS_SEED: Record<VendorKey, VendorDraft> = {
@@ -152,7 +156,7 @@ Today's payment batch is ready whenever you are. One click releases the full $34
     receivedAt: "6:15 AM",
     receivedAgo: "2 hours ago",
     ctaLabel: "Review payment batch",
-    ctaHref: "/?view=batch",
+    ctaHref: "/app?view=batch",
     ctaHint: "10 invoices · $34,512.45 · ready to release",
     unread: true,
     pinned: true,
@@ -175,7 +179,7 @@ I've put the invoice on hold and drafted a reply asking them to confirm the rate
     receivedAt: "6:18 AM",
     receivedAgo: "2 hours ago",
     ctaLabel: "Review discrepancy",
-    ctaHref: "/?view=discrepancies",
+    ctaHref: "/app?view=discrepancies",
     ctaHint: "Draft reply to vendor ready to send",
     unread: true,
   },
@@ -193,7 +197,7 @@ I've blocked it from the payment run and drafted a polite reply. No action neede
     receivedAt: "6:22 AM",
     receivedAgo: "2 hours ago",
     ctaLabel: "View audit trail",
-    ctaHref: "/?view=outbox",
+    ctaHref: "/app?view=outbox",
     unread: true,
   },
   {
@@ -214,7 +218,7 @@ Fully balanced. I've already replied to Summit confirming the reconciliation.`,
     receivedAt: "4:08 AM",
     receivedAgo: "4 hours ago",
     ctaLabel: "Open reconciliation",
-    ctaHref: "/?view=statements",
+    ctaHref: "/app?view=statements",
   },
   {
     id: "erin-5",
@@ -230,7 +234,402 @@ Forward the receipt to ap@greenfieldpm.com and I'll auto-match and code it. Othe
     receivedAt: "Yesterday",
     receivedAgo: "1 day ago",
     ctaLabel: "Upload receipt",
-    ctaHref: "/?view=cards",
+    ctaHref: "/app?view=cards",
+  },
+  {
+    id: "fill-docusign",
+    fromName: "DocuSign",
+    fromEmail: "dse@docusign.net",
+    subject: "Completed: Oak St Unit 3B · 12-month lease renewal",
+    snippet: "All parties have signed. The executed document is attached to this notification…",
+    body: `Hello Erin,
+
+All parties have completed "Oak St Unit 3B — Lease Renewal 2026."
+
+Participants:
+• Jamie Ortega (Tenant) — signed 2026-04-20 7:38 AM
+• Erin Boyd (Property Manager) — signed 2026-04-20 7:41 AM
+• Greenfield PM (Counter-signer) — signed 2026-04-20 7:42 AM
+
+You can view or download the signed document from the link above.
+
+Thanks for using DocuSign.`,
+    receivedAt: "7:42 AM",
+    receivedAgo: "1 hour ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "DS", color: "#fcba03" },
+  },
+  {
+    id: "fill-slack",
+    fromName: "Slack",
+    fromEmail: "notifications@slack.com",
+    subject: "3 new messages in #ap-team · Greenfield PM",
+    snippet: "Marcus: 'Just uploaded April vendor certs to Drive'. Priya: 'Heads up on the Reliable hold…'",
+    body: `You have 3 unread messages in #ap-team.
+
+Marcus Hill · 7:24 AM
+Just uploaded April vendor certs to Drive — Summit's new COI is in there.
+
+Priya Patel · 7:27 AM
+Heads up on the Reliable hold — I want to be looped in before we release anything over $2K to them this month.
+
+Marcus Hill · 7:29 AM
+Copy. I'll flag it on the batch.`,
+    receivedAt: "7:30 AM",
+    receivedAgo: "1 hour ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "SL", color: "#611f69" },
+  },
+  {
+    id: "fill-zillow",
+    fromName: "Zillow Rentals",
+    fromEmail: "noreply@zillow.com",
+    subject: "4 new leads for Maple St Unit 12A",
+    snippet: "Applicants are asking about availability dates and pet policy. Respond within 24h for best results…",
+    body: `You have 4 new leads for 418 Maple St, Unit 12A.
+
+Applicants are asking about:
+• Availability dates (3 leads)
+• Pet policy (2 leads)
+• Parking (1 lead)
+
+Respond within 24 hours for best placement in Zillow search results.`,
+    receivedAt: "7:05 AM",
+    receivedAgo: "1 hour ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "Z", color: "#006aff" },
+  },
+  {
+    id: "fill-chase-alert",
+    fromName: "Chase Alerts",
+    fromEmail: "alerts@chase.com",
+    subject: "Balance alert · Operating ****4411 below $250,000",
+    snippet: "Your balance at 6:45 AM is $243,180.14, which is below your alert threshold of $250,000…",
+    body: `Balance alert for Greenfield Property Management LLC.
+
+Account: Operating Checking ****4411
+Balance at 6:45 AM: $243,180.14
+Alert threshold: $250,000.00
+
+Pending incoming transfers totaling $62,400.00 are expected to clear by end of day.`,
+    receivedAt: "6:50 AM",
+    receivedAgo: "1 hour ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "JP", color: "#117aca" },
+  },
+  {
+    id: "fill-chase-daily",
+    fromName: "Chase Business",
+    fromEmail: "statements@chase.com",
+    subject: "Daily activity summary · 2026-04-19",
+    snippet: "12 transactions posted yesterday totaling $41,290.55 in debits and $18,422.00 in credits…",
+    body: `Daily activity summary for 2026-04-19.
+
+Operating ****4411
+• 12 transactions posted
+• Debits: $41,290.55
+• Credits: $18,422.00
+• Ending balance: $284,912.06
+
+No unusual activity detected.`,
+    receivedAt: "5:00 AM",
+    receivedAgo: "3 hours ago",
+    isFiller: true,
+    avatar: { initials: "JP", color: "#117aca" },
+  },
+  {
+    id: "fill-gcal",
+    fromName: "Google Calendar",
+    fromEmail: "calendar-notification@google.com",
+    subject: "Your schedule today · 3 events",
+    snippet: "9:00 AM Vendor review w/ Marcus · 11:30 AM Board walkthrough 418 Maple · 2:00 PM CFO 1:1…",
+    body: `Good morning. Here's your schedule for Monday, April 20, 2026.
+
+• 9:00 AM — Vendor review with Marcus Hill (30 min)
+• 11:30 AM — Board walkthrough at 418 Maple St (1 hr)
+• 2:00 PM — 1:1 with Priya Patel, CFO (45 min)
+
+You have 4 hours of focus time blocked between events.`,
+    receivedAt: "4:30 AM",
+    receivedAgo: "3 hours ago",
+    isFiller: true,
+    avatar: { initials: "G", color: "#4285f4" },
+  },
+  {
+    id: "fill-coned",
+    fromName: "Con Edison",
+    fromEmail: "no-reply@coned.com",
+    subject: "Your April bill is ready · 418 Maple St",
+    snippet: "April bill amount: $412.86. Due May 12, 2026. Enrolled in auto-pay on account ****4411…",
+    body: `Your April electric bill for 418 Maple St is ready.
+
+Amount due: $412.86
+Due date: May 12, 2026
+Auto-pay: Enrolled (Chase ****4411)
+
+Usage is up 4% vs March, in line with seasonal averages.`,
+    receivedAt: "3:15 AM",
+    receivedAgo: "5 hours ago",
+    isFiller: true,
+    avatar: { initials: "CE", color: "#0a4b78" },
+  },
+  {
+    id: "fill-linkedin",
+    fromName: "LinkedIn",
+    fromEmail: "messages-noreply@linkedin.com",
+    subject: "You appeared in 17 searches this week",
+    snippet: "Your profile showed up in searches from recruiters at Greystar, AvalonBay, and 3 other companies…",
+    body: `Your profile was found in 17 searches last week, up from 11 the week before.
+
+Top searchers' companies:
+• Greystar
+• AvalonBay Communities
+• Related Companies
+• 3 others
+
+See who's searching for people like you.`,
+    receivedAt: "12:02 AM",
+    receivedAgo: "8 hours ago",
+    isFiller: true,
+    avatar: { initials: "in", color: "#0a66c2" },
+  },
+  {
+    id: "fill-marcus-vendors",
+    fromName: "Marcus Hill",
+    fromEmail: "marcus@greenfieldpm.com",
+    subject: "Updated vendor certification list for April",
+    snippet: "Added Summit Plumbing's new COI and pulled Metro Electric since their GL lapses May 1…",
+    body: `Hi Erin,
+
+Updated the vendor cert sheet this afternoon:
+
+• Added Summit Plumbing's new COI (good through Apr 2027)
+• Pulled Metro Electric from the approved list — their GL coverage lapses May 1 and they haven't sent renewal yet
+• Reliable Landscaping's W-9 is still outstanding, I'll chase them again Monday
+
+Let me know if you want me to hold payments to anyone until certs are current.
+
+Marcus`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    isFiller: true,
+    avatar: { initials: "MH", color: "#1a73e8" },
+  },
+  {
+    id: "fill-nydos",
+    fromName: "NY Dept of State",
+    fromEmail: "do-not-reply@dos.ny.gov",
+    subject: "Biennial statement accepted · Greenfield Property Management LLC",
+    snippet: "Your biennial filing has been processed. Next filing due April 2028…",
+    body: `Your biennial statement for Greenfield Property Management LLC (DOS ID 4402918) has been processed and accepted.
+
+Filing confirmation: BS-2026-0418-NY
+Next filing due: April 2028
+
+This email is automated. Please do not reply.`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    isFiller: true,
+    avatar: { initials: "NY", color: "#002060" },
+  },
+  {
+    id: "fill-tenant-jaime",
+    fromName: "Jaime Ortega",
+    fromEmail: "jaime.ortega@gmail.com",
+    subject: "Work order · Unit 4B · Leaky kitchen faucet",
+    snippet: "Hi Erin, the kitchen faucet in my unit has been dripping pretty steadily since Saturday. Anytime this week…",
+    body: `Hi Erin,
+
+The kitchen faucet in my unit (4B) has been dripping pretty steadily since Saturday morning. Not urgent but I'd love to get it handled before it gets worse.
+
+I'm working from home all week so anytime is fine for the plumber to come by. My number is on file.
+
+Thanks,
+Jaime`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    isFiller: true,
+    avatar: { initials: "JO", color: "#9334e8" },
+  },
+  {
+    id: "fill-cfo-priya",
+    fromName: "Priya Patel",
+    fromEmail: "priya@greenfieldpm.com",
+    subject: "Quick Q on March AP aging",
+    snippet: "Can you walk me through the jump in 30-60 bucket? Board meeting Monday and I want to understand it…",
+    body: `Hey Erin,
+
+Can you walk me through the jump in the 30-60 day bucket in March? It looks like ~$18K more than February and I want to understand it before the board meeting Monday.
+
+Happy to grab 15 minutes tomorrow if easier than email.
+
+Priya`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "PP", color: "#e67c73" },
+  },
+  {
+    id: "fill-qbo",
+    fromName: "QuickBooks Online",
+    fromEmail: "quickbooks@notification.intuit.com",
+    subject: "Your monthly bookkeeping summary · March 2026",
+    snippet: "Net income: $27,418. Largest expense category: Repairs & Maintenance ($14,290). 0 uncategorized transactions…",
+    body: `Your March 2026 bookkeeping summary is ready.
+
+• Total income: $148,920
+• Total expenses: $121,502
+• Net income: $27,418
+
+Top expense categories:
+1. Repairs & Maintenance: $14,290
+2. Utilities: $8,120
+3. Insurance: $6,800
+
+0 uncategorized transactions. Your books are clean for the month.`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "QB", color: "#2ca01c" },
+  },
+  {
+    id: "fill-yardi",
+    fromName: "Yardi Systems",
+    fromEmail: "updates@yardi.com",
+    subject: "New in Voyager · Payables automation module available",
+    snippet: "Your workspace admin can enable the new AP automation module from Settings > Modules…",
+    body: `We've released the new Payables Automation module for Yardi Voyager.
+
+Key features:
+• Automated invoice capture from email
+• Three-way matching
+• Payment batch release to your banking integration
+
+Your workspace admin can enable it from Settings > Modules. A 60-day trial is included.`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "Y", color: "#e87722" },
+  },
+  {
+    id: "fill-hoa",
+    fromName: "Maple Street Condo Board",
+    fromEmail: "board@maplestreetcondo.org",
+    subject: "Reminder: Board meeting Thursday 7:00 PM",
+    snippet: "Agenda: Q1 financials, pool deck bids, short-term rental policy vote. Remote dial-in available…",
+    body: `Reminder that the April board meeting is Thursday, April 23 at 7:00 PM in the community room.
+
+Agenda:
+1. Q1 financial review
+2. Pool deck resurfacing bids (3 vendors)
+3. Short-term rental policy vote
+4. Elevator modernization scope
+
+Remote dial-in available. Dial-in info is in the shared calendar invite.`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "MS", color: "#15803d" },
+  },
+  {
+    id: "fill-liberty",
+    fromName: "Liberty Mutual Commercial",
+    fromEmail: "quotes@libertymutual.com",
+    subject: "Your commercial property quote is ready",
+    snippet: "4-property portfolio · $4.2M coverage · annual premium $18,420 (saves $2,180 vs current carrier)…",
+    body: `Your commercial property insurance quote is ready.
+
+Portfolio: 4 properties
+Total coverage: $4,200,000
+Annual premium: $18,420
+Estimated savings: $2,180/yr vs current carrier
+
+Quote is valid for 30 days. Let us know if you'd like to schedule a call to review.`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "LM", color: "#ffb200" },
+  },
+  {
+    id: "fill-gworkspace",
+    fromName: "Google Workspace",
+    fromEmail: "workspace-noreply@google.com",
+    subject: "Security checkup for greenfieldpm.com",
+    snippet: "2 sign-ins from new devices this week. All verified. No suspicious activity…",
+    body: `Your weekly security summary for greenfieldpm.com.
+
+• 2 sign-ins from new devices (both verified via 2FA)
+• 0 suspicious activity events
+• 7 of 7 users have 2FA enabled
+• 0 external sharing violations
+
+No action required.`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "GW", color: "#4285f4" },
+  },
+  {
+    id: "fill-pmdigest",
+    fromName: "PropertyManager Weekly",
+    fromEmail: "newsletter@pm-weekly.com",
+    subject: "April rental trends · vacancy down 0.8pp YoY",
+    snippet: "Regional roundup: mid-Atlantic markets seeing fastest rent growth since 2022. Tips for turn season…",
+    body: `This week's digest.
+
+Market pulse:
+• National vacancy down 0.8pp year-over-year
+• Mid-Atlantic markets leading rent growth (strongest since 2022)
+• Turn season tips from operators managing 500+ units
+
+Read the full issue online.`,
+    receivedAt: "Apr 15",
+    receivedAgo: "5 days ago",
+    isFiller: true,
+    avatar: { initials: "PW", color: "#6b7280" },
+  },
+  {
+    id: "fill-gusto",
+    fromName: "Gusto",
+    fromEmail: "noreply@gusto.com",
+    subject: "Payroll processed · April 1-15 period",
+    snippet: "7 employees paid. Total $38,294.55. Next run April 30. All tax filings submitted automatically…",
+    body: `Your April 1-15 payroll has been processed.
+
+• 7 employees paid
+• Gross payroll: $38,294.55
+• Employer taxes: $2,926.50
+• Next run: April 30
+
+All federal and state tax filings were submitted automatically.`,
+    receivedAt: "Apr 14",
+    receivedAgo: "6 days ago",
+    isFiller: true,
+    avatar: { initials: "G", color: "#ff6b35" },
+  },
+  {
+    id: "fill-amazon",
+    fromName: "Amazon Business",
+    fromEmail: "auto-confirm@amazon.com",
+    subject: "Delivered: 2 orders to 418 Maple St",
+    snippet: "Lot of 12 air filters (20x25x1) and commercial-grade mop heads delivered at 2:14 PM…",
+    body: `Your orders were delivered to 418 Maple St, NY on April 13, 2026 at 2:14 PM.
+
+Order 112-8234918-4402918
+• Lot of 12 air filters (20x25x1) — $89.88
+
+Order 112-8240122-9928314
+• Commercial-grade mop heads (pack of 6) — $42.50
+
+Thanks for shopping with Amazon Business.`,
+    receivedAt: "Apr 13",
+    receivedAgo: "7 days ago",
+    isFiller: true,
+    avatar: { initials: "A", color: "#ff9900" },
   },
 ];
 
@@ -254,7 +653,7 @@ No action required unless you want to review before approving the batch.`,
   receivedAt: "just now",
   receivedAgo: "seconds ago",
   ctaLabel: "Review in payment batch",
-  ctaHref: "/?view=batch",
+  ctaHref: "/app?view=batch",
   ctaHint: "Matched invoice · $399.00 · ready to release",
   unread: true,
   pinned: true,
@@ -279,11 +678,870 @@ I've placed a payment hold and drafted a reply to accounts@reliablelandscaping.c
   receivedAt: "just now",
   receivedAgo: "seconds ago",
   ctaLabel: "Review discrepancy",
-  ctaHref: "/?view=discrepancies",
+  ctaHref: "/app?view=discrepancies",
   ctaHint: "Draft reply to vendor ready to send",
   unread: true,
   pinned: true,
 };
+
+// Emails that land in ap@greenfieldpm.com when the vendor hits "Send" during the demo.
+const AP_EMAIL_FROM_SUMMIT: InboxEmail = {
+  id: "ap-summit-4821",
+  fromName: "Summit Plumbing Billing",
+  fromEmail: "billing@summitplumbing.com",
+  subject: "Invoice SP-4821 · Unit 12B faucet + service",
+  snippet: "Attached is invoice SP-4821 for the recent work completed at 418 Maple St, Unit 12B…",
+  body: `Hi Greenfield team,
+
+Attached is invoice SP-4821 for the recent work completed at 418 Maple St, Unit 12B. Scope covered the Moen 87039 kitchen faucet replacement, two shut-off valves, and 1.5 hours of service time.
+
+Let me know if you need a W-9 refresh for the year. Payment terms are Net 30 as always.
+
+Thanks,
+Summit Plumbing · Billing`,
+  receivedAt: "just now",
+  receivedAgo: "seconds ago",
+  unread: true,
+  isFiller: true,
+  avatar: { initials: "SP", color: "#1a73e8" },
+};
+
+const AP_EMAIL_FROM_RELIABLE: InboxEmail = {
+  id: "ap-reliable-2210",
+  fromName: "Reliable Landscaping",
+  fromEmail: "accounts@reliablelandscaping.com",
+  subject: "April invoice · portfolio grounds service",
+  snippet: "Invoice RL-2210 attached for April grounds service across the portfolio…",
+  body: `Hi,
+
+Invoice RL-2210 attached for April grounds service across the portfolio. Four properties, weekly visits, plus the mulch we agreed on for the Maple and Oak properties.
+
+Our updated rate is reflected in this invoice.
+
+Reliable Landscaping`,
+  receivedAt: "just now",
+  receivedAgo: "seconds ago",
+  unread: true,
+  isFiller: true,
+  avatar: { initials: "RL", color: "#188038" },
+};
+
+// AP inbox — the flood. This is why we need the agent. Heavy mix of invoices, statements,
+// past-due pings, duplicates, vendor pitches. Mostly unread.
+const AP_INBOX: InboxEmail[] = [
+  {
+    id: "ap-metro-resend",
+    fromName: "Metro Electric",
+    fromEmail: "billing@metroelectric.com",
+    subject: "RE: Invoice ME-0912 · please confirm receipt",
+    snippet: "Hi — just following up to confirm you received invoice ME-0912. Payment is showing as outstanding on our side…",
+    body: `Hi,
+
+Just following up to confirm you received invoice ME-0912 ($1,240.00, issued 2026-04-02). Our system shows it as outstanding. If it's already been paid please send the check number so we can reconcile on our end.
+
+Thanks,
+Metro Electric Billing`,
+    receivedAt: "7:54 AM",
+    receivedAgo: "minutes ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "ME", color: "#ef4444" },
+  },
+  {
+    id: "ap-cornerstone",
+    fromName: "Cornerstone HVAC",
+    fromEmail: "billing@cornerstonehvac.com",
+    subject: "Invoice CH-3091 · spring tune-ups (4 units)",
+    snippet: "Invoice CH-3091 attached for the April tune-up visits. All four units passed. Net 15 terms…",
+    body: `Hi team,
+
+Attached is CH-3091 for the four spring tune-ups completed April 16-18. All systems passed.
+
+• 418 Maple St — 2 units — PASS
+• 22 Oak St — 1 unit — PASS
+• 601 Elm Ave — 1 unit — PASS
+
+Terms Net 15. Let me know if you need the filter sizes resent.
+
+Cornerstone HVAC`,
+    receivedAt: "7:15 AM",
+    receivedAgo: "1 hour ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "CH", color: "#0891b2" },
+  },
+  {
+    id: "ap-brightbuild",
+    fromName: "BrightBuild Painting",
+    fromEmail: "invoices@brightbuildpaint.com",
+    subject: "Invoice BB-220 · hallway touch-up Unit 8",
+    snippet: "Invoice BB-220 attached, $485.00, for hallway touch-up work completed 2026-04-15…",
+    body: `Invoice BB-220 attached for hallway touch-up work at 418 Maple St, completed 2026-04-15. $485.00.
+
+BrightBuild Painting`,
+    receivedAt: "6:42 AM",
+    receivedAgo: "1 hour ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "BB", color: "#a855f7" },
+  },
+  {
+    id: "ap-safeguard",
+    fromName: "SafeGuard Pest Control",
+    fromEmail: "billing@safeguardpest.com",
+    subject: "April monthly invoice · PC-5521",
+    snippet: "April service completed across all four properties. Invoice PC-5521 attached. Auto-pay on file…",
+    body: `Invoice PC-5521 attached for April monthly service.
+
+• 418 Maple St
+• 22 Oak St
+• 601 Elm Ave
+• 115 Pine St
+
+Total: $640.00. Auto-pay on file — will draft on 2026-04-28.
+
+SafeGuard`,
+    receivedAt: "6:38 AM",
+    receivedAgo: "2 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "SG", color: "#16a34a" },
+  },
+  {
+    id: "ap-springfield-pastdue",
+    fromName: "Springfield Roofing",
+    fromEmail: "ar@springfieldroofing.com",
+    subject: "⚠ PAST DUE · Invoice SR-1048 · 32 days outstanding",
+    snippet: "This is our second notice. Invoice SR-1048 for $4,280.00 has been outstanding since 2026-03-19…",
+    body: `This is our second notice.
+
+Invoice SR-1048 for $4,280.00 has been outstanding since 2026-03-19 (32 days). Please remit payment within 5 business days to avoid a 1.5% late fee and potential service hold on future work orders.
+
+If payment has been issued, please forward the check number.
+
+Springfield Roofing — Accounts Receivable`,
+    receivedAt: "6:14 AM",
+    receivedAgo: "2 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "SR", color: "#dc2626" },
+  },
+  {
+    id: "ap-docupro",
+    fromName: "DocuPro Copiers",
+    fromEmail: "statements@docupro.com",
+    subject: "Statement of account · April 2026",
+    snippet: "Your April statement is attached. Three open invoices totaling $1,824.55…",
+    body: `Your April statement of account is attached.
+
+Open invoices:
+• DP-1180 — $620.00 — 2026-04-02
+• DP-1198 — $620.00 — 2026-04-09
+• DP-1214 — $584.55 — 2026-04-16
+
+Total outstanding: $1,824.55
+
+Please remit or contact us with any questions.
+
+DocuPro Billing`,
+    receivedAt: "5:58 AM",
+    receivedAgo: "2 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "DP", color: "#1e40af" },
+  },
+  {
+    id: "ap-cleanco",
+    fromName: "CleanCo Janitorial",
+    fromEmail: "billing@cleanco.co",
+    subject: "Invoices CC-0444 and CC-0445 (batched)",
+    snippet: "Two invoices batched together — biweekly janitorial for 418 Maple and 22 Oak…",
+    body: `Two invoices batched for April biweekly janitorial:
+
+• CC-0444 — 418 Maple St — $820.00
+• CC-0445 — 22 Oak St — $640.00
+
+Total: $1,460.00. Net 30.
+
+CleanCo`,
+    receivedAt: "5:34 AM",
+    receivedAgo: "3 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "CC", color: "#14b8a6" },
+  },
+  {
+    id: "ap-waste",
+    fromName: "Waste Management",
+    fromEmail: "billing@wm.com",
+    subject: "Invoice WM-88120 · April refuse + recycling",
+    snippet: "Your April refuse and recycling service invoice is ready. Amount: $1,120.00…",
+    body: `Invoice WM-88120 for April refuse and recycling service.
+
+Total: $1,120.00
+Due: 2026-05-10
+
+Waste Management`,
+    receivedAt: "5:12 AM",
+    receivedAgo: "3 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "WM", color: "#15803d" },
+  },
+  {
+    id: "ap-verizon",
+    fromName: "Verizon Business",
+    fromEmail: "ebill@verizon.com",
+    subject: "Your bill is ready · April · $428.14",
+    snippet: "Your Verizon Business bill is ready. Total due $428.14. Auto-pay scheduled for 2026-04-27…",
+    body: `Your April Verizon Business bill is ready.
+
+Total: $428.14
+Auto-pay: Chase ****4411 on 2026-04-27
+
+Verizon`,
+    receivedAt: "4:48 AM",
+    receivedAgo: "3 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "V", color: "#dc2626" },
+  },
+  {
+    id: "ap-officemax",
+    fromName: "OfficeMax Business",
+    fromEmail: "orders@officemax.com",
+    subject: "Invoice attached · supplies reorder",
+    snippet: "Thanks for your order. Invoice OM-9928 attached, $312.48…",
+    body: `Thanks for your order. Invoice OM-9928 attached for $312.48.
+
+Items:
+• Copy paper (10 reams) — $64.90
+• Toner HP 58X (2) — $189.00
+• Misc. office supplies — $58.58
+
+OfficeMax Business`,
+    receivedAt: "4:32 AM",
+    receivedAgo: "3 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "OM", color: "#b91c1c" },
+  },
+  {
+    id: "ap-kone",
+    fromName: "Kone Elevator",
+    fromEmail: "ar@kone.com",
+    subject: "Invoice KE-7712 · Q2 scheduled maintenance",
+    snippet: "Q2 scheduled maintenance for 418 Maple elevator. $1,840.00. Invoice attached…",
+    body: `Invoice KE-7712 attached for Q2 scheduled elevator maintenance at 418 Maple St.
+
+Total: $1,840.00
+Terms: Net 30
+
+Kone Elevator`,
+    receivedAt: "3:18 AM",
+    receivedAgo: "5 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "K", color: "#0f766e" },
+  },
+  {
+    id: "ap-aqua-pastdue",
+    fromName: "AquaSource Water",
+    fromEmail: "collections@aquasource.com",
+    subject: "⚠ PAST DUE · 45 days · Invoice AQ-3320",
+    snippet: "Invoice AQ-3320 is 45 days past due. Please contact us immediately to avoid service interruption…",
+    body: `Invoice AQ-3320 ($284.90) is 45 days past due. Please contact us within 3 business days to resolve or we'll be forced to suspend service.
+
+AquaSource Collections`,
+    receivedAt: "2:46 AM",
+    receivedAgo: "5 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "AQ", color: "#b91c1c" },
+  },
+  {
+    id: "ap-handypro",
+    fromName: "HandyPro",
+    fromEmail: "billing@handypro.com",
+    subject: "Invoice HP-1188 · Unit 6A drywall repair",
+    snippet: "Invoice HP-1188 for drywall repair at 418 Maple Unit 6A, $340.00…",
+    body: `Invoice HP-1188 for drywall repair at 418 Maple Unit 6A (2026-04-17). $340.00.
+
+HandyPro`,
+    receivedAt: "2:05 AM",
+    receivedAgo: "6 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "HP", color: "#f59e0b" },
+  },
+  {
+    id: "ap-couriers",
+    fromName: "Urgent Couriers",
+    fromEmail: "invoices@urgentcouriers.com",
+    subject: "Invoice UC-0419 · delivery charges 2026-04-19",
+    snippet: "3 same-day deliveries on 2026-04-19. Total $128.00…",
+    body: `Invoice UC-0419 for 3 same-day deliveries on 2026-04-19. Total $128.00.
+
+Urgent Couriers`,
+    receivedAt: "12:58 AM",
+    receivedAgo: "7 hours ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "UC", color: "#7c3aed" },
+  },
+  {
+    id: "ap-homeshield",
+    fromName: "HomeShield Security",
+    fromEmail: "billing@homeshield.com",
+    subject: "Camera system quarterly bill",
+    snippet: "Q2 monitoring for all four properties. Invoice HS-4421, $960.00…",
+    body: `Invoice HS-4421 for Q2 camera system monitoring across all four properties. $960.00. Auto-pay on file.
+
+HomeShield`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "HS", color: "#0369a1" },
+  },
+  {
+    id: "ap-priya-audit",
+    fromName: "Priya Patel",
+    fromEmail: "priya@greenfieldpm.com",
+    subject: "Following up on Q1 vendor audit",
+    snippet: "Hey — did we finish cross-checking the Q1 vendor list against the 1099 report yet? Want to close it out this week…",
+    body: `Hey,
+
+Did we finish cross-checking the Q1 vendor list against the 1099 report yet? Want to close it out this week before month-end closes.
+
+Priya`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "PP", color: "#e67c73" },
+  },
+  {
+    id: "ap-metro-old",
+    fromName: "Metro Electric",
+    fromEmail: "billing@metroelectric.com",
+    subject: "Invoice ME-0912 (resend) · payment status?",
+    snippet: "Re-sending invoice ME-0912 in case it got lost. Please confirm payment status when you can…",
+    body: `Re-sending invoice ME-0912 in case it got lost. Please confirm payment status when you can.
+
+Metro Electric`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "ME", color: "#ef4444" },
+  },
+  {
+    id: "ap-allegro-w9",
+    fromName: "Allegro HVAC",
+    fromEmail: "ap@allegrohvac.com",
+    subject: "W-9 update request for 2026",
+    snippet: "Can you send us an updated W-9 for the year? Our records on file expired Dec 2025…",
+    body: `Hi,
+
+Can you send us an updated W-9 for the 2026 tax year? The one we have on file expired December 2025.
+
+Thanks,
+Allegro HVAC Accounting`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "AH", color: "#0891b2" },
+  },
+  {
+    id: "ap-sunbelt",
+    fromName: "Sunbelt Rentals",
+    fromEmail: "billing@sunbeltrentals.com",
+    subject: "Equipment rental invoice · scissor lift (3 days)",
+    snippet: "Invoice SB-7780 for scissor lift rental 2026-04-15 through 2026-04-17. $612.00…",
+    body: `Invoice SB-7780 for scissor lift rental (3 days, 2026-04-15 — 2026-04-17). $612.00.
+
+Sunbelt Rentals`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "SB", color: "#ea580c" },
+  },
+  {
+    id: "ap-fastfloors",
+    fromName: "FastFloors Inc.",
+    fromEmail: "billing@fastfloors.com",
+    subject: "Invoice FF-5503 · Unit 2C carpet replacement",
+    snippet: "Carpet replacement completed at Unit 2C. Invoice FF-5503 attached, $2,140.00…",
+    body: `Invoice FF-5503 attached for carpet replacement at 418 Maple Unit 2C. $2,140.00.
+
+FastFloors Inc.`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "FF", color: "#7c3aed" },
+  },
+  {
+    id: "ap-greenthumb",
+    fromName: "Green Thumb Nursery",
+    fromEmail: "ar@greenthumbnursery.com",
+    subject: "Invoice GTN-0912 · spring planting",
+    snippet: "Spring planting completed at 22 Oak and 418 Maple. Invoice GTN-0912 for $892.50…",
+    body: `Spring planting completed at 22 Oak and 418 Maple. Invoice GTN-0912 attached for $892.50.
+
+Green Thumb Nursery`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    isFiller: true,
+    avatar: { initials: "GT", color: "#15803d" },
+  },
+  {
+    id: "ap-locksmith",
+    fromName: "Priority 1 Locksmith",
+    fromEmail: "billing@priority1lock.com",
+    subject: "Rekey service invoice · 2026-04-18",
+    snippet: "Rekey of Unit 5B after tenant turnover. Invoice P1-8820 for $185.00…",
+    body: `Invoice P1-8820 for rekey service at Unit 5B after tenant turnover. $185.00.
+
+Priority 1 Locksmith`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    isFiller: true,
+    avatar: { initials: "P1", color: "#f59e0b" },
+  },
+  {
+    id: "ap-junk",
+    fromName: "1-800-GOT-JUNK",
+    fromEmail: "receipts@1800gotjunk.com",
+    subject: "Invoice for 4/17 removal",
+    snippet: "Invoice GJ-44128 for bulk debris removal at 601 Elm Ave on 2026-04-17. $485.00…",
+    body: `Invoice GJ-44128 for bulk debris removal at 601 Elm Ave on 2026-04-17. $485.00.
+
+1-800-GOT-JUNK`,
+    receivedAt: "Yesterday",
+    receivedAgo: "1 day ago",
+    isFiller: true,
+    avatar: { initials: "GJ", color: "#1e40af" },
+  },
+  {
+    id: "ap-reliable-march-reminder",
+    fromName: "Reliable Landscaping",
+    fromEmail: "accounts@reliablelandscaping.com",
+    subject: "Reminder: Invoice RL-2209 (March) still unpaid",
+    snippet: "Just a friendly ping that RL-2209 from March is still showing unpaid on our side. Total $1,200…",
+    body: `Hi,
+
+Just a friendly ping that RL-2209 from March is still showing unpaid on our side. Total $1,200. Let us know if there's an issue we can help resolve.
+
+Reliable Landscaping`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "RL", color: "#188038" },
+  },
+  {
+    id: "ap-statewide",
+    fromName: "Statewide Insurance",
+    fromEmail: "billing@statewideins.com",
+    subject: "Premium due notice · commercial property bundle",
+    snippet: "Your quarterly premium of $6,482.00 is due by 2026-05-01. Auto-pay not enabled…",
+    body: `Your quarterly premium of $6,482.00 is due by 2026-05-01. Auto-pay is not enabled on this policy.
+
+Please remit by the due date to maintain coverage without interruption.
+
+Statewide Insurance`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "SI", color: "#1e3a8a" },
+  },
+  {
+    id: "ap-metrowater-pastdue",
+    fromName: "Metropolitan Water Supply",
+    fromEmail: "billing@metrowater.gov",
+    subject: "⚠ PAST DUE · April water bill",
+    snippet: "April water bill of $612.40 is past due. 10% surcharge applied if not paid by 2026-04-30…",
+    body: `Your April water bill of $612.40 is past due. A 10% surcharge will be applied if not paid by 2026-04-30.
+
+Metropolitan Water Supply`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "MW", color: "#b91c1c" },
+  },
+  {
+    id: "ap-nextgen-pitch",
+    fromName: "NextGen Pest Solutions",
+    fromEmail: "sales@nextgenpest.com",
+    subject: "Ready to switch from SafeGuard? Free quote inside",
+    snippet: "We noticed you're using SafeGuard. NextGen offers 20% less with better service guarantees…",
+    body: `Hi,
+
+We noticed you're using SafeGuard for pest control. NextGen offers 20% less with better service guarantees and a 30-day free trial.
+
+Book a call: nextgenpest.com/quote
+
+NextGen Pest Sales`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "NG", color: "#94a3b8" },
+  },
+  {
+    id: "ap-abc",
+    fromName: "ABC Supply Co.",
+    fromEmail: "billing@abcsupply.com",
+    subject: "Invoice ABC-6612 · roofing materials",
+    snippet: "Invoice ABC-6612 for roofing materials delivered to 115 Pine St. $1,402.88…",
+    body: `Invoice ABC-6612 attached for roofing materials delivered to 115 Pine St. Total $1,402.88.
+
+ABC Supply Co.`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "A", color: "#dc2626" },
+  },
+  {
+    id: "ap-invoice2go-spam",
+    fromName: "Invoice2Go",
+    fromEmail: "marketing@invoice2go.com",
+    subject: "Stop chasing invoices · try our app free",
+    snippet: "Tired of hunting down payments? Our app automates invoice chase-ups so you can focus on growth…",
+    body: `Tired of hunting down payments? Invoice2Go automates invoice chase-ups so you can focus on growth. First 60 days free.
+
+Start trial: invoice2go.com`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "I2", color: "#ec4899" },
+  },
+  {
+    id: "ap-summit-statement",
+    fromName: "Summit Plumbing Billing",
+    fromEmail: "billing@summitplumbing.com",
+    subject: "Statement of account · March 2026",
+    snippet: "Summit Plumbing statement for March 2026. Five invoices totaling $3,218.40, all paid in full…",
+    body: `Statement of account for March 2026.
+
+Five invoices totaling $3,218.40, all paid in full.
+
+No action needed — just for your records.
+
+Summit Plumbing`,
+    receivedAt: "Apr 18",
+    receivedAgo: "2 days ago",
+    isFiller: true,
+    avatar: { initials: "SP", color: "#1a73e8" },
+  },
+  {
+    id: "ap-prioritysewer",
+    fromName: "Priority Sewer",
+    fromEmail: "billing@prioritysewer.com",
+    subject: "Invoice PS-440 · line cleaning 418 Maple",
+    snippet: "Main line cleaning completed 2026-04-15. Invoice PS-440 for $740.00…",
+    body: `Invoice PS-440 for main line cleaning at 418 Maple St on 2026-04-15. $740.00.
+
+Priority Sewer`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "PS", color: "#0f766e" },
+  },
+  {
+    id: "ap-powerfit",
+    fromName: "PowerFit Gym Equipment",
+    fromEmail: "service@powerfit.com",
+    subject: "Quarterly service invoice · fitness center",
+    snippet: "Q2 service visit completed at the 418 Maple fitness center. Invoice PF-3322 for $420.00…",
+    body: `Q2 service visit completed at the 418 Maple fitness center. Invoice PF-3322 for $420.00.
+
+PowerFit`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "PF", color: "#7c3aed" },
+  },
+  {
+    id: "ap-uber",
+    fromName: "Uber for Business",
+    fromEmail: "business-receipts@uber.com",
+    subject: "Monthly charges summary · March",
+    snippet: "March Uber for Business charges: 14 trips, $482.14 total across 3 riders…",
+    body: `March Uber for Business charges:
+
+• 14 trips
+• $482.14 total
+• 3 active riders
+
+Uber for Business`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "U", color: "#111827" },
+  },
+  {
+    id: "ap-amazon-receipt",
+    fromName: "Amazon Business",
+    fromEmail: "auto-confirm@amazon.com",
+    subject: "Your order receipt · office supplies",
+    snippet: "Order 112-8240122-9928314. Total $142.38 charged to Chase Ink ending 4411…",
+    body: `Your Amazon Business order receipt.
+
+Order 112-8240122-9928314
+Total: $142.38
+Paid: Chase Ink ****4411
+
+Amazon Business`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "A", color: "#ff9900" },
+  },
+  {
+    id: "ap-grainger",
+    fromName: "Grainger",
+    fromEmail: "billing@grainger.com",
+    subject: "Invoice GR-889421 · filter stock reorder",
+    snippet: "Filter stock reorder completed. Invoice GR-889421 for $348.90 attached…",
+    body: `Invoice GR-889421 for filter stock reorder. $348.90.
+
+Grainger`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "GR", color: "#dc2626" },
+  },
+  {
+    id: "ap-staples",
+    fromName: "Staples Business",
+    fromEmail: "receipts@staples.com",
+    subject: "Your recent purchase receipt",
+    snippet: "Receipt for in-store purchase 2026-04-16. Total $67.90 on Chase Ink ending 4411…",
+    body: `Receipt for in-store purchase 2026-04-16. Total $67.90 on Chase Ink ending 4411.
+
+Staples`,
+    receivedAt: "Apr 17",
+    receivedAgo: "3 days ago",
+    isFiller: true,
+    avatar: { initials: "S", color: "#b91c1c" },
+  },
+  {
+    id: "ap-reliable-resend",
+    fromName: "Reliable Landscaping",
+    fromEmail: "accounts@reliablelandscaping.com",
+    subject: "Invoice RL-2210 resend · please confirm received",
+    snippet: "Hi, just resending RL-2210 in case it didn't come through. Please confirm receipt…",
+    body: `Hi,
+
+Just resending RL-2210 in case it didn't come through cleanly the first time. Please confirm receipt when you get a chance.
+
+Reliable Landscaping`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "RL", color: "#188038" },
+  },
+  {
+    id: "ap-adt",
+    fromName: "ADT Commercial",
+    fromEmail: "billing@adt.com",
+    subject: "Monthly monitoring invoice",
+    snippet: "Monthly monitoring invoice for all four properties. $412.00…",
+    body: `Monthly monitoring invoice for all four properties. $412.00. Auto-pay enabled.
+
+ADT Commercial`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "AD", color: "#1e40af" },
+  },
+  {
+    id: "ap-onepass",
+    fromName: "OnePass Tolls",
+    fromEmail: "statements@onepass.com",
+    subject: "Toll invoice · fleet vehicles · April",
+    snippet: "April toll charges across 3 fleet vehicles. Total $184.50…",
+    body: `April toll charges across 3 fleet vehicles. Total $184.50.
+
+OnePass`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "OP", color: "#0891b2" },
+  },
+  {
+    id: "ap-bestbuy",
+    fromName: "Best Buy Commercial",
+    fromEmail: "warranty@bestbuy.com",
+    subject: "Warranty renewal notice · laundry machines",
+    snippet: "Extended warranty on your commercial laundry machines expires 2026-05-15. Renewal $440…",
+    body: `Extended warranty on your commercial laundry machines (serial ending 4412, 4418) expires 2026-05-15. Renewal is $440 for 2 more years.
+
+Best Buy Commercial`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "BB", color: "#1e3a8a" },
+  },
+  {
+    id: "ap-servicechannel",
+    fromName: "ServiceChannel",
+    fromEmail: "noreply@servicechannel.com",
+    subject: "April work orders summary",
+    snippet: "28 work orders dispatched in April. 24 closed, 4 still open. See the breakdown inside…",
+    body: `April work orders summary.
+
+• 28 dispatched
+• 24 closed
+• 4 still open (see dashboard)
+
+ServiceChannel`,
+    receivedAt: "Apr 16",
+    receivedAgo: "4 days ago",
+    isFiller: true,
+    avatar: { initials: "SC", color: "#16a34a" },
+  },
+  {
+    id: "ap-fedex",
+    fromName: "FedEx",
+    fromEmail: "billonline@fedex.com",
+    subject: "Invoice · shipping charges week of Apr 8",
+    snippet: "Weekly FedEx shipping invoice. 12 shipments, $284.14…",
+    body: `Weekly FedEx shipping invoice. 12 shipments, $284.14 total.
+
+FedEx`,
+    receivedAt: "Apr 15",
+    receivedAgo: "5 days ago",
+    isFiller: true,
+    avatar: { initials: "FX", color: "#7c3aed" },
+  },
+  {
+    id: "ap-ups",
+    fromName: "UPS Store #2418",
+    fromEmail: "billing@theupsstore.com",
+    subject: "Mailbox annual renewal",
+    snippet: "Your PO box rental renews 2026-05-01. Annual fee $240…",
+    body: `Your PO box rental renews 2026-05-01. Annual fee is $240.
+
+UPS Store #2418`,
+    receivedAt: "Apr 15",
+    receivedAgo: "5 days ago",
+    isFiller: true,
+    avatar: { initials: "U", color: "#92400e" },
+  },
+  {
+    id: "ap-brightspeed",
+    fromName: "Brightspeed Internet",
+    fromEmail: "ebill@brightspeed.com",
+    subject: "Business internet bill · April",
+    snippet: "Your April Brightspeed business internet bill. Amount due $218.00…",
+    body: `Your April Brightspeed business internet bill. Amount due $218.00. Auto-pay on file.
+
+Brightspeed`,
+    receivedAt: "Apr 15",
+    receivedAgo: "5 days ago",
+    isFiller: true,
+    avatar: { initials: "BS", color: "#f59e0b" },
+  },
+  {
+    id: "ap-castiron-pastdue",
+    fromName: "CastIron HVAC",
+    fromEmail: "ar@castironhvac.com",
+    subject: "⚠ PAST DUE · Warranty coverage renewal",
+    snippet: "Your warranty renewal payment is 18 days past due. Coverage gap begins 2026-04-30 if unpaid…",
+    body: `Your warranty renewal payment is 18 days past due. Coverage gap begins 2026-04-30 if unpaid.
+
+Amount: $892.00
+
+CastIron HVAC`,
+    receivedAt: "Apr 15",
+    receivedAgo: "5 days ago",
+    unread: true,
+    isFiller: true,
+    avatar: { initials: "CI", color: "#b91c1c" },
+  },
+  {
+    id: "ap-quincy",
+    fromName: "Quincy Lumber",
+    fromEmail: "ar@quincylumber.com",
+    subject: "Receipt for PO-1061",
+    snippet: "Delivery receipt for PO-1061 — dimensional lumber. Signed by Marcus Hill at 10:14 AM…",
+    body: `Delivery receipt for PO-1061 — dimensional lumber. Signed by Marcus Hill at 10:14 AM.
+
+Total: $1,842.14
+
+Quincy Lumber`,
+    receivedAt: "Apr 15",
+    receivedAgo: "5 days ago",
+    isFiller: true,
+    avatar: { initials: "QL", color: "#92400e" },
+  },
+  {
+    id: "ap-signwave",
+    fromName: "SignWave Printing",
+    fromEmail: "invoices@signwave.com",
+    subject: "Invoice · courtesy signage for common areas",
+    snippet: "Invoice SW-220 for courtesy signage (pool, laundry, pet waste). $318.40…",
+    body: `Invoice SW-220 for courtesy signage (pool, laundry, pet waste). $318.40.
+
+SignWave Printing`,
+    receivedAt: "Apr 14",
+    receivedAgo: "6 days ago",
+    isFiller: true,
+    avatar: { initials: "SW", color: "#0891b2" },
+  },
+  {
+    id: "ap-reliable-pricememo",
+    fromName: "Reliable Landscaping",
+    fromEmail: "accounts@reliablelandscaping.com",
+    subject: "NEW pricing memo effective May 1",
+    snippet: "Please note new per-visit rates effective 2026-05-01. Memo attached for your records…",
+    body: `Please note new per-visit rates effective 2026-05-01. Memo attached for your records.
+
+Previous: $75/visit
+New: $85/visit
+
+Reliable Landscaping`,
+    receivedAt: "Apr 14",
+    receivedAgo: "6 days ago",
+    isFiller: true,
+    avatar: { initials: "RL", color: "#188038" },
+  },
+  {
+    id: "ap-culligan",
+    fromName: "Culligan Water",
+    fromEmail: "billing@culligan.com",
+    subject: "April delivery invoice · water service",
+    snippet: "Invoice CW-4401 for April water service delivery. $84.50…",
+    body: `Invoice CW-4401 for April water service delivery. $84.50.
+
+Culligan Water`,
+    receivedAt: "Apr 14",
+    receivedAgo: "6 days ago",
+    isFiller: true,
+    avatar: { initials: "CW", color: "#0369a1" },
+  },
+  {
+    id: "ap-rotolos-spam",
+    fromName: "Rotolo's Pizza Catering",
+    fromEmail: "orders@rotolos.com",
+    subject: "Team lunch offers for property managers",
+    snippet: "Feed your team for less — bulk lunch packages starting at $9/person. Repeat-customer discount…",
+    body: `Feed your team for less — bulk lunch packages starting at $9/person. Repeat-customer discount applies.
+
+Rotolo's Catering`,
+    receivedAt: "Apr 14",
+    receivedAgo: "6 days ago",
+    isFiller: true,
+    avatar: { initials: "R", color: "#94a3b8" },
+  },
+];
 
 export function VendorMail() {
   const [active, setActive] = useState<AccountKey>("summit");
@@ -293,17 +1551,25 @@ export function VendorMail() {
   const [composing, setComposing] = useState<VendorKey | null>(null);
   const [openEmail, setOpenEmail] = useState<string | null>(null);
   const [erinInbox, setErinInbox] = useState<InboxEmail[]>(ERIN_INBOX);
+  const [apInbox, setApInbox] = useState<InboxEmail[]>(AP_INBOX);
 
   useEffect(() => {
     return subscribeDemo((msg) => {
       if (msg.type === "reset") {
         setErinInbox(ERIN_INBOX);
+        setApInbox(AP_INBOX);
         return;
       }
       if (msg.type === "invoice_sent") {
         const agentEmail =
           msg.invoiceId === "inv-summit-4821" ? AGENT_EMAIL_SUMMIT : AGENT_EMAIL_RELIABLE;
-        // Simulate the agent taking a moment to process before the email lands
+        const apEmail =
+          msg.invoiceId === "inv-summit-4821" ? AP_EMAIL_FROM_SUMMIT : AP_EMAIL_FROM_RELIABLE;
+        // Vendor's invoice lands in ap@ immediately; the agent's summary to Erin follows a moment later.
+        setApInbox((prev) => {
+          if (prev.some((e) => e.id === apEmail.id)) return prev;
+          return [apEmail, ...prev];
+        });
         const delay = msg.invoiceId === "inv-summit-4821" ? 4500 : 5500;
         setTimeout(() => {
           setErinInbox((prev) => {
@@ -346,8 +1612,12 @@ export function VendorMail() {
     setActive("summit");
     setOpenEmail(null);
     setErinInbox(ERIN_INBOX);
+    setApInbox(AP_INBOX);
     publishDemo({ type: "reset", at: Date.now() });
   };
+
+  const isInboxView = active === "erin" || active === "ap";
+  const inboxEmails = active === "ap" ? apInbox : erinInbox;
 
   return (
     <div className="h-screen w-screen flex flex-col bg-white text-[#202124] relative overflow-hidden">
@@ -356,12 +1626,12 @@ export function VendorMail() {
         <SideRail
           active={active}
           onCompose={() => {
-            if (active === "erin") return;
-            openCompose(active);
+            if (isInboxView) return;
+            openCompose(active as VendorKey);
           }}
           onReset={onReset}
           sent={sent}
-          erinInbox={erinInbox}
+          inboxEmails={inboxEmails}
         />
         <Main
           active={active}
@@ -370,7 +1640,7 @@ export function VendorMail() {
           onOpenDraft={(k) => openCompose(k)}
           openEmail={openEmail}
           onOpenEmail={setOpenEmail}
-          erinInbox={erinInbox}
+          inboxEmails={inboxEmails}
         />
       </div>
       {composing && (
@@ -514,6 +1784,17 @@ function TopBar({
                     setMenuOpen(false);
                   }}
                 />
+                <AccountRow
+                  name="AP Inbox · Greenfield PM"
+                  email="ap@greenfieldpm.com"
+                  initials="AP"
+                  color="#5f6368"
+                  active={activeKey === "ap"}
+                  onClick={() => {
+                    onSwitch("ap");
+                    setMenuOpen(false);
+                  }}
+                />
               </div>
             </>
           )}
@@ -565,27 +1846,29 @@ function SideRail({
   onCompose,
   onReset,
   sent,
-  erinInbox,
+  inboxEmails,
 }: {
   active: AccountKey;
   onCompose: () => void;
   onReset: () => void;
   sent: Record<VendorKey, boolean>;
-  erinInbox: InboxEmail[];
+  inboxEmails: InboxEmail[];
 }) {
+  const isInboxView = active === "erin" || active === "ap";
   const isErin = active === "erin";
-  const draftsOpen = isErin ? 0 : (sent.summit ? 0 : 1) + (sent.reliable ? 0 : 1);
-  const inboxUnread = isErin ? erinInbox.filter((e) => e.unread).length : 12;
-  const sentCount = !isErin ? Number(sent.summit) + Number(sent.reliable) : 0;
+  const isAp = active === "ap";
+  const draftsOpen = isInboxView ? 0 : (sent.summit ? 0 : 1) + (sent.reliable ? 0 : 1);
+  const inboxUnread = isInboxView ? inboxEmails.filter((e) => e.unread).length : 12;
+  const sentCount = !isInboxView ? Number(sent.summit) + Number(sent.reliable) : 0;
 
   return (
     <aside className="w-[256px] shrink-0 py-2 px-3 bg-white overflow-auto">
       <button
         onClick={onCompose}
-        disabled={isErin}
+        disabled={isInboxView}
         className={cn(
           "flex items-center gap-4 pl-3 pr-6 h-14 rounded-2xl shadow-[0_1px_3px_rgba(60,64,67,0.15)] hover:shadow-[0_2px_6px_rgba(60,64,67,0.2)] transition-shadow",
-          isErin ? "bg-[#f1f3f4] opacity-60 cursor-not-allowed" : "bg-[#c2e7ff]"
+          isInboxView ? "bg-[#f1f3f4] opacity-60 cursor-not-allowed" : "bg-[#c2e7ff]"
         )}
       >
         <Pencil className="w-5 h-5 text-[#001d35]" />
@@ -593,11 +1876,11 @@ function SideRail({
       </button>
 
       <nav className="mt-4 text-[14px]">
-        <RailItem icon={<InboxIcon className="w-5 h-5" />} label="Inbox" count={inboxUnread} active={isErin} />
+        <RailItem icon={<InboxIcon className="w-5 h-5" />} label="Inbox" count={inboxUnread} active={isInboxView} />
         <RailItem icon={<Star className="w-5 h-5" />} label="Starred" />
         <RailItem icon={<Clock className="w-5 h-5" />} label="Snoozed" />
         <RailItem icon={<SendIcon className="w-5 h-5" />} label="Sent" count={sentCount || undefined} />
-        <RailItem icon={<FileText className="w-5 h-5" />} label="Drafts" count={draftsOpen || undefined} active={!isErin} />
+        <RailItem icon={<FileText className="w-5 h-5" />} label="Drafts" count={draftsOpen || undefined} active={!isInboxView} />
         <RailItem icon={<Tag className="w-5 h-5" />} label="Categories" />
         <div className="pl-6 pr-4 h-8 flex items-center text-[13px] text-[#5f6368]">More</div>
 
@@ -606,9 +1889,21 @@ function SideRail({
             <span>Labels</span>
             <Plus className="w-4 h-4" />
           </div>
-          <LabelChip color="#d93025" label="PayablePilot" count={isErin ? erinInbox.length : undefined} />
-          <LabelChip color="#188038" label="Payments" />
-          <LabelChip color="#f9ab00" label="Exceptions" />
+          <LabelChip
+            color="#d93025"
+            label="PayablePilot"
+            count={isErin ? inboxEmails.filter((e) => !e.isFiller).length : undefined}
+          />
+          <LabelChip
+            color="#188038"
+            label="Invoices"
+            count={isAp ? inboxEmails.filter((e) => /invoice/i.test(e.subject)).length : undefined}
+          />
+          <LabelChip
+            color="#f9ab00"
+            label="Past due"
+            count={isAp ? inboxEmails.filter((e) => /past due/i.test(e.subject)).length : undefined}
+          />
         </div>
 
         <div className="mt-6 pl-6 pr-4">
@@ -672,7 +1967,7 @@ function Main({
   onOpenDraft,
   openEmail,
   onOpenEmail,
-  erinInbox,
+  inboxEmails,
 }: {
   active: AccountKey;
   drafts: Record<VendorKey, VendorDraft>;
@@ -680,19 +1975,20 @@ function Main({
   onOpenDraft: (k: VendorKey) => void;
   openEmail: string | null;
   onOpenEmail: (id: string | null) => void;
-  erinInbox: InboxEmail[];
+  inboxEmails: InboxEmail[];
 }) {
+  const isInboxView = active === "erin" || active === "ap";
   const current = useMemo(
-    () => (active === "erin" ? erinInbox.find((e) => e.id === openEmail) ?? null : null),
-    [active, openEmail, erinInbox]
+    () => (isInboxView ? inboxEmails.find((e) => e.id === openEmail) ?? null : null),
+    [isInboxView, openEmail, inboxEmails]
   );
-  if (active === "erin") {
+  if (isInboxView) {
     return (
       <div className="flex-1 min-h-0 bg-white overflow-auto rounded-tl-2xl border-t border-l border-[#e8eaed] mt-1">
         {current ? (
           <EmailReader email={current} onBack={() => onOpenEmail(null)} />
         ) : (
-          <ErinInbox emails={erinInbox} onOpen={onOpenEmail} />
+          <ErinInbox emails={inboxEmails} onOpen={onOpenEmail} />
         )}
       </div>
     );
@@ -1057,9 +2353,18 @@ function ErinInbox({ emails, onOpen }: { emails: InboxEmail[]; onOpen: (id: stri
             <div className="w-5 h-5 rounded-sm border border-[#dadce0] shrink-0" />
             <Star className={cn("w-[18px] h-[18px] shrink-0", e.pinned ? "text-[#f9ab00]" : "text-[#5f6368]/40")} />
             <div className={cn("w-[180px] shrink-0 truncate flex items-center gap-3", e.unread && "font-semibold text-[#202124]")}>
-              <div className="w-6 h-6 rounded-full bg-[#d93025] text-white grid place-items-center shrink-0">
-                <Sparkles className="w-3 h-3" />
-              </div>
+              {e.avatar ? (
+                <div
+                  className="w-6 h-6 rounded-full text-white grid place-items-center shrink-0 text-[10px] font-semibold"
+                  style={{ background: e.avatar.color }}
+                >
+                  {e.avatar.initials}
+                </div>
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-[#d93025] text-white grid place-items-center shrink-0">
+                  <Sparkles className="w-3 h-3" />
+                </div>
+              )}
               <span className="truncate text-[13.5px]">{e.fromName}</span>
             </div>
             <div className="flex-1 min-w-0 truncate text-[13.5px]">
@@ -1113,12 +2418,23 @@ function EmailReader({ email, onBack }: { email: InboxEmail; onBack: () => void 
         {/* Sender */}
         <div className="flex items-start gap-3 mt-5">
           <div className="relative shrink-0">
-            <div className="w-10 h-10 rounded-full bg-[#d93025] text-white grid place-items-center">
-              <Sparkles className="w-[17px] h-[17px]" />
-            </div>
-            <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white grid place-items-center">
-              <BadgeCheck className="w-4 h-4 text-[#1a73e8] fill-[#1a73e8] stroke-white" />
-            </span>
+            {email.avatar ? (
+              <div
+                className="w-10 h-10 rounded-full text-white grid place-items-center text-[14px] font-semibold"
+                style={{ background: email.avatar.color }}
+              >
+                {email.avatar.initials}
+              </div>
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-full bg-[#d93025] text-white grid place-items-center">
+                  <Sparkles className="w-[17px] h-[17px]" />
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white grid place-items-center">
+                  <BadgeCheck className="w-4 h-4 text-[#1a73e8] fill-[#1a73e8] stroke-white" />
+                </span>
+              </>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-1.5 flex-wrap">
@@ -1183,6 +2499,13 @@ function ActionButton({ icon, label }: { icon: React.ReactNode; label: string })
 }
 
 function BrandedEmailBody({ email }: { email: InboxEmail }) {
+  if (email.isFiller) {
+    return (
+      <div className="max-w-[620px] text-[14px] leading-[1.65] text-[#202124] whitespace-pre-wrap">
+        {email.body}
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-[#e8eaed] bg-white overflow-hidden max-w-[620px]">
       {/* Branded header */}
@@ -1202,18 +2525,20 @@ function BrandedEmailBody({ email }: { email: InboxEmail }) {
       </div>
 
       {/* CTA */}
-      <div className="px-7 pb-6">
-        <a
-          href={email.ctaHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-5 h-10 rounded-md bg-[#0d9488] text-white text-[13.5px] font-medium hover:bg-[#0b807a] no-underline"
-        >
-          {email.ctaLabel}
-          <ChevronRight className="w-4 h-4" />
-        </a>
-        {email.ctaHint && <div className="mt-2 text-[12px] text-[#5f6368]">{email.ctaHint}</div>}
-      </div>
+      {email.ctaLabel && email.ctaHref && (
+        <div className="px-7 pb-6">
+          <a
+            href={email.ctaHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 h-10 rounded-md bg-[#0d9488] text-white text-[13.5px] font-medium hover:bg-[#0b807a] no-underline"
+          >
+            {email.ctaLabel}
+            <ChevronRight className="w-4 h-4" />
+          </a>
+          {email.ctaHint && <div className="mt-2 text-[12px] text-[#5f6368]">{email.ctaHint}</div>}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-7 py-4 bg-[#f6f8fc] border-t border-[#e8eaed] text-[11px] text-[#5f6368] flex items-center justify-between flex-wrap gap-2">

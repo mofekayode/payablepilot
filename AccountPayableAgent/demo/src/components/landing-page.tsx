@@ -51,7 +51,7 @@ function TopNav() {
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-[1180px] mx-auto px-6 h-16 flex items-center">
-        <Link href="/landing" className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-md bg-foreground text-background grid place-items-center">
             <Feather className="w-4 h-4" />
           </div>
@@ -65,7 +65,9 @@ function TopNav() {
         </nav>
         <div className="ml-auto flex items-center gap-2">
           <a
-            href="#cta"
+            href="https://calendly.com/mofekayode/15min"
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90"
           >
             <Calendar className="w-4 h-4" /> Book a demo
@@ -139,19 +141,14 @@ function Hero() {
               <span className="text-xs text-muted font-mono">greenfield-pm-demo.loom</span>
               <span className="ml-auto text-[11px] text-muted">2 min 10 sec</span>
             </div>
-            <div className="aspect-video bg-surface grid place-items-center text-muted">
-              {/* Replace this div with the <Loom> embed */}
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-background border border-border grid place-items-center mx-auto">
-                  <PlayCircle className="w-8 h-8 text-brand" />
-                </div>
-                <div className="mt-3 text-sm font-medium text-foreground">Loom video goes here</div>
-                <div className="text-xs mt-1">
-                  Replace the placeholder in{" "}
-                  <code className="font-mono text-[11px] px-1 py-0.5 bg-background border border-border rounded">landing-page.tsx</code>{" "}
-                  with your Loom embed.
-                </div>
-              </div>
+            <div className="aspect-video bg-surface">
+              <iframe
+                src="https://www.loom.com/embed/82733eac0b334e3884f8f4c9502fa58e"
+                title="PayablePilot demo"
+                allow="fullscreen; clipboard-write"
+                allowFullScreen
+                className="w-full h-full border-0"
+              />
             </div>
           </div>
         </div>
@@ -365,7 +362,7 @@ function InteractiveTour() {
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              href="/"
+              href="/app"
               className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-foreground text-background hover:opacity-90"
             >
               Drive the live product
@@ -596,7 +593,9 @@ function FinalCta() {
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="#"
+            href="https://calendly.com/mofekayode/15min"
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 h-11 px-6 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
           >
             <Calendar className="w-4 h-4" />
@@ -627,7 +626,7 @@ function Footer() {
           <a className="hover:text-foreground" href="#">Terms</a>
           <a className="hover:text-foreground" href="#">Security</a>
           <Link href="/tour" className="hover:text-foreground">Tour</Link>
-          <Link href="/" className="hover:text-foreground">Live product</Link>
+          <Link href="/app" className="hover:text-foreground">Live product</Link>
         </div>
       </div>
     </footer>
