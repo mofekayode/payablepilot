@@ -6,7 +6,6 @@ import {
   CreditCard,
   Users,
   LayoutDashboard,
-  Feather,
   Film,
   Clock,
   FileSpreadsheet,
@@ -19,6 +18,7 @@ import { useStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { vendorCompliance, agingReport, expenseReports, cardTransactions, monthEnd, statements, outbox } from "@/lib/app-data";
 import Link from "next/link";
+import { PilotMark } from "./pilot-mark";
 
 export type ViewId =
   | "digest"
@@ -60,7 +60,7 @@ export function Sidebar({
     <aside className="w-[248px] shrink-0 border-r border-border bg-background flex flex-col">
       <div className="px-4 py-4 flex items-center gap-3 border-b border-border">
         <div className="w-9 h-9 rounded-md bg-foreground text-background grid place-items-center">
-          <Feather className="w-4 h-4" />
+          <PilotMark className="w-4 h-4" />
         </div>
         <div>
           <div className="text-[15px] font-semibold tracking-tight">PayablePilot</div>

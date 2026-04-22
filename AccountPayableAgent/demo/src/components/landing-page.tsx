@@ -5,7 +5,6 @@ import {
   Calendar,
   PlayCircle,
   ArrowRight,
-  Feather,
   Mail,
   ClipboardList,
   FileText,
@@ -28,6 +27,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { DemoOrchestrator } from "./demo-orchestrator";
+import { PilotMark } from "./pilot-mark";
 
 export function LandingPage() {
   return (
@@ -53,7 +53,7 @@ function TopNav() {
       <div className="max-w-[1180px] mx-auto px-6 h-16 flex items-center">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-md bg-foreground text-background grid place-items-center">
-            <Feather className="w-4 h-4" />
+            <PilotMark className="w-4 h-4" />
           </div>
           <span className="font-semibold tracking-tight text-[17px]">PayablePilot</span>
         </Link>
@@ -388,7 +388,7 @@ function TourPreviewCard({ onOpen }: { onOpen: () => void }) {
         {/* Faux app chrome */}
         <div className="absolute inset-x-0 top-0 h-12 bg-background border-b border-border flex items-center gap-3 px-5 text-[13px]">
           <div className="w-7 h-7 rounded-md bg-foreground text-background grid place-items-center">
-            <Feather className="w-3.5 h-3.5" />
+            <PilotMark className="w-3.5 h-3.5" />
           </div>
           <div className="font-semibold tracking-tight">PayablePilot</div>
           <div className="text-muted">· Greenfield PM · AP assistant</div>
@@ -616,7 +616,7 @@ function Footer() {
       <div className="max-w-[1180px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-muted">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded bg-foreground text-background grid place-items-center">
-            <Feather className="w-3 h-3" />
+            <PilotMark className="w-3 h-3" />
           </div>
           <span className="font-semibold text-foreground">PayablePilot</span>
           <span>© 2026</span>

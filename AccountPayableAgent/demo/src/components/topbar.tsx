@@ -1,5 +1,5 @@
 "use client";
-import { Feather } from "lucide-react";
+import { PilotMark } from "./pilot-mark";
 import { company } from "@/lib/demo-data";
 
 export function TopBar({ sceneLabel }: { sceneLabel: string }) {
@@ -7,7 +7,7 @@ export function TopBar({ sceneLabel }: { sceneLabel: string }) {
     <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-background">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-md bg-foreground flex items-center justify-center text-background">
-          <Feather className="w-4 h-4" />
+          <PilotMark className="w-4 h-4" />
         </div>
         <div className="flex items-baseline gap-3">
           <span className="font-semibold tracking-tight text-[17px]">PayablePilot</span>
