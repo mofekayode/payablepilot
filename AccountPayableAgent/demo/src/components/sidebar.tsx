@@ -7,6 +7,7 @@ import {
   Users,
   LayoutDashboard,
   Film,
+  Settings as SettingsIcon,
   Clock,
   FileSpreadsheet,
   ReceiptText,
@@ -179,7 +180,14 @@ export function Sidebar({
         </Group>
       </div>
 
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-border space-y-2">
+        <Link
+          href="/settings"
+          className="flex items-center gap-2 text-xs text-muted hover:text-foreground px-3 py-2 rounded-md border border-border bg-surface"
+        >
+          <SettingsIcon className="w-3.5 h-3.5" />
+          Settings &amp; automation
+        </Link>
         <Link
           href="/tour"
           className="flex items-center gap-2 text-xs text-muted hover:text-foreground px-3 py-2 rounded-md border border-border bg-surface"
@@ -187,7 +195,7 @@ export function Sidebar({
           <Film className="w-3.5 h-3.5" />
           Watch the guided tour
         </Link>
-        <div className="mt-3 p-3 rounded-lg border border-border bg-surface">
+        <div className="p-3 rounded-lg border border-border bg-surface">
           <div className="flex items-center gap-2 text-[11px]">
             <span className="w-1.5 h-1.5 rounded-full bg-brand" />
             <span className="font-medium">QuickBooks Online</span>
