@@ -80,14 +80,16 @@ export type GmailMessageSummary = {
 };
 
 // List recent messages in the AP inbox that look like invoices (have attachments).
-export async function listInvoiceMessages(maxResults = 25): Promise<GmailMessageSummary[]> {
+export async function listInvoiceMessages(opts: { maxResults?: number; days?: number; query?: string } = {}): Promise<GmailMessageSummary[]> {
+  const { maxResults = 25, days = 30, query } = opts;
   const gmail = await getGmailClient();
   if (!gmail) throw new Error("Gmail is not connected.");
 
-  // Heuristic: anything in INBOX with an attachment from the last 7 days.
+  // Default heuristic: anything with an attachment in the last N days. Caller can override with `query`.
+  const q = query ?? `has:attachment newer_than:${days}d`;
   const list = await gmail.users.messages.list({
     userId: "me",
-    q: "has:attachment newer_than:7d",
+    q,
     maxResults,
   });
 
