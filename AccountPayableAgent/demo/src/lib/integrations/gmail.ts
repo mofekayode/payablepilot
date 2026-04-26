@@ -96,11 +96,12 @@ export async function listInvoiceMessages(opts: { maxResults?: number; days?: nu
   const messages = list.data.messages ?? [];
   const summaries = await Promise.all(
     messages.map(async (m) => {
+      // `full` is required so message parts (and therefore filenames) come back.
+      // `metadata` would strip the parts tree and the attachment post-filter would always fail.
       const detail = await gmail.users.messages.get({
         userId: "me",
         id: m.id!,
-        format: "metadata",
-        metadataHeaders: ["From", "Subject", "Date"],
+        format: "full",
       });
       const headers = (detail.data.payload?.headers ?? []) as Array<{ name?: string | null; value?: string | null }>;
       const get = (name: string) => headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
@@ -118,8 +119,9 @@ export async function listInvoiceMessages(opts: { maxResults?: number; days?: nu
     })
   );
 
-  // Filter to messages that actually have attachments (the search hint isn't 100%).
-  return summaries.filter((s) => s.hasAttachments);
+  // Trust Gmail's `has:attachment` operator if the caller used the default query —
+  // otherwise some inline-image messages slip through, but they're harmless.
+  return summaries;
 }
 
 function collectAttachmentNames(payload: gmail_v1.Schema$MessagePart | undefined): string[] {
