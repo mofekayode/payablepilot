@@ -90,7 +90,7 @@ function Hero() {
           Without adding headcount.
         </h1>
         <p className="mt-5 text-[18px] leading-[1.6] text-muted max-w-[720px]">
-          PayablePilot reads every invoice that lands in your inbox, matches it against your purchase orders, codes the GL, and prepares your payment batch inside whatever you already use for books. You review. You approve. You go home on time.
+          PayablePilot reads every invoice that lands in your inbox, matches it against your purchase orders, codes the GL, and posts the bill straight to QuickBooks or Xero. You review. You approve. You go home on time.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -115,18 +115,12 @@ function Hero() {
         </div>
 
         <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] text-muted">
-          <span className="uppercase tracking-[0.18em] font-medium">Works with</span>
-          <span className="font-medium text-foreground">QuickBooks</span>
-          <span>·</span>
-          <span className="font-medium text-foreground">Excel</span>
-          <span>·</span>
-          <span className="font-medium text-foreground">Sage</span>
-          <span>·</span>
-          <span className="font-medium text-foreground">NetSuite</span>
+          <span className="uppercase tracking-[0.18em] font-medium">Posts directly to</span>
+          <span className="font-medium text-foreground">QuickBooks Online</span>
           <span>·</span>
           <span className="font-medium text-foreground">Xero</span>
           <span>·</span>
-          <span>and whatever spreadsheet your team already lives in.</span>
+          <span>more accounting integrations on the way.</span>
         </div>
 
         {/* Loom video placeholder */}
@@ -167,7 +161,7 @@ function Features() {
     { icon: <Check className="w-4 h-4" />, title: "Two and three-way PO match", body: "Matches invoices to POs and signed receiving. Clean ones queue for payment." },
     { icon: <Ban className="w-4 h-4" />, title: "Duplicate detection", body: "Catches re-sent invoices before they reach your payment run." },
     { icon: <Sparkles className="w-4 h-4" />, title: "Discrepancy flagging", body: "Drafts a vendor email explaining the variance, and holds payment until you confirm." },
-    { icon: <CreditCard className="w-4 h-4" />, title: "Payment batch prep", body: "Builds today's batch, routes to you, pushes to your accounting system on approval." },
+    { icon: <CreditCard className="w-4 h-4" />, title: "Posts bills to QuickBooks or Xero", body: "Builds today's bills, routes to you for approval, pushes them straight into QuickBooks Online or Xero." },
   ];
   const periodic = [
     { icon: <Clock className="w-4 h-4" />, title: "AP aging reports", body: "Refreshed every hour. Auto-reminders go out past 30, 60, and 90 days." },
@@ -191,7 +185,7 @@ function Features() {
             Running quietly in the background.
           </h2>
           <p className="mt-4 text-[16px] leading-[1.6] text-muted">
-            Plugs into whatever you already use for books, whether that&apos;s QuickBooks, Excel, Sage, NetSuite, or Xero. Matches your chart of accounts, your vendors, your approval chain. Shows its work and asks before it pays anything.
+            Connects to QuickBooks Online or Xero, matches your chart of accounts, your vendors, your approval chain. Shows its work and asks before it posts anything.
           </p>
         </div>
 
@@ -255,7 +249,7 @@ function HowItWorks() {
           <Step
             num="03"
             title="You review and approve"
-            body="Every payment batch comes to you for approval. One click, pushed to your accounting system. Full visibility, full control, zero data entry."
+            body="Every bill comes to you for approval. One click and it's posted to QuickBooks or Xero. Full visibility, full control, zero data entry."
           />
         </div>
       </div>
@@ -285,7 +279,7 @@ function TheMath() {
             Get your week back.
           </h2>
           <p className="mt-4 text-[16px] leading-[1.65] text-muted">
-            A typical office manager spends 10 to 15 hours a week on AP work that could be running in the background. Invoice entry, PO matching, chasing receipts, tracking W-9s, reconciling statements. PayablePilot handles all of it inside whatever books your team already uses, so they spend their time on work that actually moves the business.
+            A typical office manager spends 10 to 15 hours a week on AP work that could be running in the background. Invoice entry, PO matching, chasing receipts, tracking W-9s, reconciling statements. PayablePilot handles all of it and posts the result into QuickBooks Online or Xero, so your team spends their time on work that actually moves the business.
           </p>
           <ul className="mt-6 space-y-2 text-[14px]">
             <Bullet text="Setup in one week. No new software to learn." />

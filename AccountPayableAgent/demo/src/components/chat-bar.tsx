@@ -53,7 +53,7 @@ function welcomeText(state: StoreSnapshot): string {
   const dupes = state.invoices.filter((i) => i.status === "duplicate").length;
 
   const bits: string[] = [];
-  if (matched.length > 0) bits.push(`**${matched.length}** matched and ready for batch approval (**${money(matchedTotal)}**)`);
+  if (matched.length > 0) bits.push(`**${matched.length}** matched and ready to post to QuickBooks (**${money(matchedTotal)}**)`);
   if (flagged > 0) bits.push(`**${flagged}** flagged discrepancy`);
   if (dupes > 0) bits.push(`**${dupes}** duplicate I blocked`);
 
@@ -211,12 +211,12 @@ function answer(q: string, state: StoreSnapshot): AgentResult {
     const submittedExp = expenseReports.filter((e) => e.status === "submitted");
     const missingReceipts = cardTransactions.filter((t) => t.status === "missing_receipt").length;
 
-    const steps = ["scanning payment batch", "pulling flagged items", "checking expenses + cards"];
+    const steps = ["scanning bills to post", "pulling flagged items", "checking expenses + cards"];
 
     const items: string[] = [];
     if (matched.length > 0) {
       items.push(
-        `**Payment batch:** ${matched.length} matched invoice${matched.length === 1 ? "" : "s"}, **${money(batchTotal)}**. One click from Payment batch.`
+        `**Bills to post:** ${matched.length} matched invoice${matched.length === 1 ? "" : "s"}, **${money(batchTotal)}**. One click pushes them to QuickBooks.`
       );
     }
     if (flagged.length > 0) {
@@ -241,7 +241,7 @@ function answer(q: string, state: StoreSnapshot): AgentResult {
       `Three buckets on your plate:`,
     ]);
     const tail = matched.length > 0
-      ? `\n\nIf you want to clear the biggest dollar value first, start with the batch.`
+      ? `\n\nIf you want to clear the biggest dollar value first, start with bills to post.`
       : `\n\nThe discrepancy is probably the highest-priority thing here.`;
 
     return { steps, text: `${head}\n\n${items.join("\n\n")}${tail}` };

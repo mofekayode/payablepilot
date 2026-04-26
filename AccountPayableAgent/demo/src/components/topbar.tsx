@@ -1,4 +1,6 @@
 "use client";
+import Link from "next/link";
+import { Settings } from "lucide-react";
 import { PilotMark } from "./pilot-mark";
 import { company } from "@/lib/demo-data";
 
@@ -20,6 +22,13 @@ export function TopBar({ sceneLabel }: { sceneLabel: string }) {
           <span className="w-1.5 h-1.5 rounded-full bg-brand" />
           <span className="text-xs">Connected to QuickBooks Online</span>
         </div>
+        <Link
+          href="/settings"
+          className="w-8 h-8 rounded-full bg-surface border border-border grid place-items-center text-muted hover:text-foreground hover:bg-background"
+          title="Integrations"
+        >
+          <Settings className="w-4 h-4" />
+        </Link>
         <div className="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-[13px] font-medium">
           EB
         </div>

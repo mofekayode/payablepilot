@@ -53,7 +53,7 @@ HANDLED = {
         r"double.?paid",
         r"prevent.{0,20}(double|duplicate)",
     ],
-    "Payment batch prep": [
+    "Posts bills to QuickBooks / Xero": [
         r"(check|ach|wire) run",
         r"payment run",
         r"payment batch",
@@ -62,6 +62,8 @@ HANDLED = {
         r"select invoices for payment",
         r"schedule payments",
         r"payment processing",
+        r"post (bills?|invoices?)",
+        r"(quickbooks|xero|qbo)",
     ],
     "Vendor statement reconciliation": [
         r"vendor statement",
@@ -105,7 +107,7 @@ HANDLED = {
         r"period.?end close",
     ],
     "Accruals": [r"accrual"],
-    "Data entry into ERP": [
+    "Data entry into QuickBooks / Xero": [
         r"data entry",
         r"enter.{0,20}(quickbooks|sap|netsuite|oracle|dynamics|sage|xero|erp)",
         r"post.{0,20}(invoice|bill)",

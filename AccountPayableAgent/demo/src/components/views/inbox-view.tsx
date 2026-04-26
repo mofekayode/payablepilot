@@ -1,14 +1,16 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Paperclip, Search, Star, Inbox as InboxIcon, Mail, ChevronRight, FileText, CheckCheck, Sparkles } from "lucide-react";
+import { Paperclip, Search, Star, Inbox as InboxIcon, Mail, ChevronRight, FileText, CheckCheck, Sparkles, Upload } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cn, money } from "@/lib/utils";
 import { Badge, Button } from "../primitives";
 import { vendors } from "@/lib/app-data";
+import { UploadInvoiceModal } from "../upload-invoice-modal";
 
 export function InboxView({ onOpenInvoice }: { onOpenInvoice: (id: string) => void }) {
   const { emails, readEmail, arrivingEmailId, capture } = useStore();
   const [openId, setOpenId] = useState<string | null>(() => arrivingEmailId ?? emails[0]?.id ?? null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // When a new email "arrives", auto-select it so the split-pane shows the content too
   useEffect(() => {
@@ -28,13 +30,19 @@ export function InboxView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
   return (
     <div className="grid grid-cols-[360px_1fr] h-full min-h-0">
       <div className="flex flex-col border-r border-border bg-background min-h-0">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <div className="px-4 py-2.5 border-b border-border flex items-center gap-2">
           <Search className="w-4 h-4 text-muted" />
           <input
             placeholder="Search inbox"
             className="bg-transparent text-sm outline-none flex-1 placeholder:text-muted"
           />
-          <span className="text-[11px] text-muted">{emails.length} threads</span>
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-foreground text-background text-[12px] font-medium hover:opacity-90"
+            title="Upload an invoice that didn't come through email"
+          >
+            <Upload className="w-3.5 h-3.5" /> Upload
+          </button>
         </div>
         <div className="flex-1 overflow-auto scrollbar-thin">
           {sortedEmails.map((e) => {
@@ -88,6 +96,7 @@ export function InboxView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
       </div>
 
       {open ? <EmailDetail emailId={open.id} onOpenInvoice={onOpenInvoice} /> : <EmptyRight />}
+      <UploadInvoiceModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
     </div>
   );
 }

@@ -16,7 +16,7 @@ export function SceneOutro() {
           Without adding headcount.
         </h2>
         <p className="mt-5 text-lg text-muted animate-fade-in-up">
-          PayablePilot works inside whatever books you already use, handles the repetitive part, and leaves every payment for you to approve.
+          PayablePilot reads your AP inbox, posts bills straight into QuickBooks or Xero, and leaves every payment for you to approve.
         </p>
         <div className="mt-8 flex items-center justify-center gap-3 animate-fade-in-up">
           <Button>

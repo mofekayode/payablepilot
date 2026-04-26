@@ -27,15 +27,15 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
     <div className="p-6 space-y-5 overflow-auto scrollbar-thin">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <div className="text-xs uppercase tracking-wider text-muted">Payment batch</div>
-          <h1 className="text-[24px] font-semibold tracking-tight">Ready to release</h1>
+          <div className="text-xs uppercase tracking-wider text-muted">Bills to post</div>
+          <h1 className="text-[24px] font-semibold tracking-tight">Ready to post</h1>
           <p className="text-sm text-muted mt-1">
-            Matched invoices only. Nothing here moves until you approve.
+            Matched invoices, ready to push to QuickBooks. Nothing posts until you approve.
           </p>
         </div>
         {step === "done" ? (
           <Badge tone="brand">
-            <Check className="w-3 h-3" /> Batch released to QuickBooks
+            <Check className="w-3 h-3" /> Posted to QuickBooks
           </Badge>
         ) : step === "posting" ? (
           <Button disabled>
@@ -43,7 +43,7 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
           </Button>
         ) : (
           <Button onClick={onApprove} disabled={matched.length === 0}>
-            <ShieldCheck className="w-4 h-4" /> Approve batch · {money(batchTotal)}
+            <ShieldCheck className="w-4 h-4" /> Post bills to QuickBooks · {money(batchTotal)}
           </Button>
         )}
       </div>
@@ -86,7 +86,7 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
               ))}
               <li>
                 <div className="flex items-center justify-end gap-4 px-5 py-3 bg-surface">
-                  <Row label="Batch total" value={<span className="font-semibold">{money(batchTotal)}</span>} />
+                  <Row label="Post total" value={<span className="font-semibold">{money(batchTotal)}</span>} />
                 </div>
               </li>
             </ul>
@@ -96,11 +96,11 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
 
       <Card>
         <CardHeader>
-          <span className="text-sm font-medium">Paid today</span>
+          <span className="text-sm font-medium">Posted today</span>
         </CardHeader>
         <CardBody className="p-0">
           {paid.length === 0 ? (
-            <div className="px-5 py-8 text-sm text-muted">No payments released yet today.</div>
+            <div className="px-5 py-8 text-sm text-muted">No bills posted yet today.</div>
           ) : (
             <ul>
               {paid.map((inv) => (

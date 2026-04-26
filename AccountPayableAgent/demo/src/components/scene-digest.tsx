@@ -31,19 +31,19 @@ export function SceneDigest() {
               <Button onClick={() => setApproving(true)} disabled={approving}>
                 {approving ? (
                   <>
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse-soft" /> Sending to bank…
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse-soft" /> Posting to QuickBooks…
                   </>
                 ) : (
                   <>
                     <ShieldCheck className="w-4 h-4" />
-                    Approve payment batch · {money(digest.matchedTotal)}
+                    Post bills to QuickBooks · {money(digest.matchedTotal)}
                   </>
                 )}
               </Button>
             ) : (
               <Badge tone="brand">
                 <Check className="w-3 h-3" />
-                Batch approved · {money(digest.matchedTotal)}
+                Posted · {money(digest.matchedTotal)}
               </Badge>
             )}
           </div>
@@ -175,9 +175,9 @@ export function SceneDigest() {
                     <Check className="w-5 h-5" />
                   </div>
                   <div className="flex-1 text-sm">
-                    <div className="font-semibold">Payment batch released to QuickBooks</div>
+                    <div className="font-semibold">Bills posted to QuickBooks</div>
                     <div className="text-xs text-muted">
-                      {digest.matched} payments queued · {money(digest.matchedTotal)} total · settlement Monday.
+                      {digest.matched} bills posted · {money(digest.matchedTotal)} total · ready for you to release payment from QuickBooks.
                       Remittance advice drafted for each vendor.
                     </div>
                   </div>

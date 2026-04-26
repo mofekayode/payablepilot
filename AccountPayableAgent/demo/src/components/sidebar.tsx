@@ -110,7 +110,7 @@ export function Sidebar({
           />
           <NavItem
             icon={<CreditCard className="w-4 h-4" />}
-            label="Payment batch"
+            label="Bills to post"
             badge={batchCount || undefined}
             tone="brand"
             active={active === "batch"}

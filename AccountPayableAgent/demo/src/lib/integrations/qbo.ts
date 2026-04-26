@@ -1,0 +1,152 @@
+// QuickBooks Online integration: OAuth2 + helpers for vendors and bills.
+// Uses Intuit's REST API directly (no SDK) — simpler and easier to upgrade.
+// Env: QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_REDIRECT_URI, QBO_ENV ("sandbox" | "production").
+
+import { getTokens, setTokens, type StoredTokens } from "./tokens";
+
+const SCOPES = ["com.intuit.quickbooks.accounting"];
+const AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
+const TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+
+function requireEnv(): { clientId: string; clientSecret: string; redirectUri: string; apiBase: string } {
+  const clientId = process.env.QBO_CLIENT_ID;
+  const clientSecret = process.env.QBO_CLIENT_SECRET;
+  const redirectUri = process.env.QBO_REDIRECT_URI;
+  const env = process.env.QBO_ENV ?? "sandbox";
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error(
+      "QuickBooks integration not configured. Set QBO_CLIENT_ID, QBO_CLIENT_SECRET, QBO_REDIRECT_URI, and (optionally) QBO_ENV."
+    );
+  }
+  const apiBase =
+    env === "production"
+      ? "https://quickbooks.api.intuit.com"
+      : "https://sandbox-quickbooks.api.intuit.com";
+  return { clientId, clientSecret, redirectUri, apiBase };
+}
+
+export function authUrl(state: string): string {
+  const { clientId, redirectUri } = requireEnv();
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: "code",
+    scope: SCOPES.join(" "),
+    redirect_uri: redirectUri,
+    state,
+  });
+  return `${AUTH_URL}?${params.toString()}`;
+}
+
+export async function exchangeCode(code: string, realmId: string): Promise<StoredTokens> {
+  const { clientId, clientSecret, redirectUri } = requireEnv();
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirectUri,
+    }).toString(),
+  });
+  if (!res.ok) throw new Error(`QBO token exchange failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { access_token: string; refresh_token: string; expires_in: number };
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt: Date.now() + data.expires_in * 1000,
+    extra: { realmId },
+  };
+}
+
+async function refreshIfNeeded(stored: StoredTokens): Promise<StoredTokens> {
+  if (!stored.expiresAt || stored.expiresAt - 60_000 > Date.now()) return stored;
+  if (!stored.refreshToken) return stored;
+  const { clientId, clientSecret } = requireEnv();
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: stored.refreshToken,
+    }).toString(),
+  });
+  if (!res.ok) throw new Error(`QBO refresh failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { access_token: string; refresh_token?: string; expires_in: number };
+  const refreshed: StoredTokens = {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token ?? stored.refreshToken,
+    expiresAt: Date.now() + data.expires_in * 1000,
+    extra: stored.extra,
+  };
+  await setTokens("qbo", refreshed);
+  return refreshed;
+}
+
+async function authedFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const stored = await getTokens("qbo");
+  if (!stored?.extra?.realmId) throw new Error("QuickBooks is not connected.");
+  const tokens = await refreshIfNeeded(stored);
+  const { apiBase } = requireEnv();
+  const url = `${apiBase}/v3/company/${tokens.extra!.realmId}${path}`;
+  return fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${tokens.accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
+export type QboVendor = { Id: string; DisplayName: string; PrimaryEmailAddr?: { Address?: string } };
+export type QboBill = { Id: string; DocNumber?: string; TxnDate?: string; TotalAmt?: number; VendorRef?: { value: string; name?: string } };
+
+export async function listVendors(limit = 25): Promise<QboVendor[]> {
+  const res = await authedFetch(`/query?query=${encodeURIComponent(`select * from Vendor maxresults ${limit}`)}`);
+  if (!res.ok) throw new Error(`QBO listVendors failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { QueryResponse?: { Vendor?: QboVendor[] } };
+  return data.QueryResponse?.Vendor ?? [];
+}
+
+export async function listBills(limit = 25): Promise<QboBill[]> {
+  const res = await authedFetch(`/query?query=${encodeURIComponent(`select * from Bill orderby TxnDate desc maxresults ${limit}`)}`);
+  if (!res.ok) throw new Error(`QBO listBills failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { QueryResponse?: { Bill?: QboBill[] } };
+  return data.QueryResponse?.Bill ?? [];
+}
+
+export type CreateBillInput = {
+  vendorId: string;
+  txnDate: string; // YYYY-MM-DD
+  docNumber?: string;
+  lines: Array<{ description: string; amount: number; accountId: string }>;
+};
+
+export async function createBill(input: CreateBillInput): Promise<QboBill> {
+  const body = {
+    VendorRef: { value: input.vendorId },
+    TxnDate: input.txnDate,
+    DocNumber: input.docNumber,
+    Line: input.lines.map((l) => ({
+      DetailType: "AccountBasedExpenseLineDetail",
+      Amount: l.amount,
+      Description: l.description,
+      AccountBasedExpenseLineDetail: { AccountRef: { value: l.accountId } },
+    })),
+  };
+  const res = await authedFetch(`/bill?minorversion=70`, { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`QBO createBill failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { Bill: QboBill };
+  return data.Bill;
+}

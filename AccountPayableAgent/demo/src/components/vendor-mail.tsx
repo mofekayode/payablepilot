@@ -141,7 +141,7 @@ const ERIN_INBOX: InboxEmail[] = [
     fromName: "PayablePilot",
     fromEmail: "pilot@greenfieldpm.com",
     subject: "Morning digest · 11 invoices processed overnight",
-    snippet: "Matched 10, flagged 1 pricing mismatch, blocked 1 duplicate. Payment batch ready for approval…",
+    snippet: "Matched 10, flagged 1 pricing mismatch, blocked 1 duplicate. Bills ready to post to QuickBooks…",
     body: `Good morning, Erin.
 
 I worked through the overnight queue between 2:14 AM and 5:30 AM. Here's the state of play:
@@ -152,10 +152,10 @@ I worked through the overnight queue between 2:14 AM and 5:30 AM. Here's the sta
 • 1 duplicate blocked (Metro Electric ME-0912 resend)
 • 3 vendor emails drafted on your behalf
 
-Today's payment batch is ready whenever you are. One click releases the full $34K to QuickBooks.`,
+Today's bills are ready to post whenever you are. One click pushes the full $34K into QuickBooks for you to release.`,
     receivedAt: "6:15 AM",
     receivedAgo: "2 hours ago",
-    ctaLabel: "Review payment batch",
+    ctaLabel: "Review bills to post",
     ctaHref: "/app?view=batch",
     ctaHint: "10 invoices · $34,512.45 · ready to release",
     unread: true,
@@ -507,7 +507,7 @@ Top expense categories:
 Key features:
 • Automated invoice capture from email
 • Three-way matching
-• Payment batch release to your banking integration
+• Post bills directly to QuickBooks Online
 
 Your workspace admin can enable it from Settings > Modules. A 60-day trial is included.`,
     receivedAt: "Apr 17",
@@ -639,7 +639,7 @@ const AGENT_EMAIL_SUMMIT: InboxEmail = {
   fromEmail: "pilot@greenfieldpm.com",
   subject: "Invoice matched · Summit Plumbing SP-4821",
   snippet:
-    "Three-way matched against PO-1042. Coded to 6120 Repairs & Maintenance. Added to today's payment batch, ready for approval.",
+    "Three-way matched against PO-1042. Coded to 6120 Repairs & Maintenance. Posted to QuickBooks, ready for your release.",
   body: `Hi Erin,
 
 Summit Plumbing's SP-4821 landed in the inbox and I worked it while you read this.
@@ -647,12 +647,12 @@ Summit Plumbing's SP-4821 landed in the inbox and I worked it while you read thi
 • Matched against PO-1042 (approved on 2026-04-10)
 • Receiving signed by Marcus Hill on 2026-04-15
 • Coded to 6120 · Repairs & Maintenance
-• Added to today's payment batch
+• Posted to QuickBooks for your release
 
 No action required unless you want to review before approving the batch.`,
   receivedAt: "just now",
   receivedAgo: "seconds ago",
-  ctaLabel: "Review in payment batch",
+  ctaLabel: "Review in QuickBooks queue",
   ctaHref: "/app?view=batch",
   ctaHint: "Matched invoice · $399.00 · ready to release",
   unread: true,

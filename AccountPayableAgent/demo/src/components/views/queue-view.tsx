@@ -1,25 +1,36 @@
 "use client";
-import { useEffect } from "react";
-import { FileText, ChevronRight, ListChecks } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FileText, ChevronRight, ListChecks, Upload } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { Badge, Card, CardBody, CardHeader } from "../primitives";
 import { money } from "@/lib/utils";
 import { vendors } from "@/lib/app-data";
+import { UploadInvoiceModal } from "../upload-invoice-modal";
 
 export function QueueView({ onOpenInvoice }: { onOpenInvoice: (id: string) => void }) {
   const { invoices } = useStore();
+  const [uploadOpen, setUploadOpen] = useState(false);
   const captured = invoices.filter((i) => i.status === "captured");
   const processed = invoices.filter((i) => ["matched", "flagged", "duplicate"].includes(i.status));
 
   return (
     <div className="p-6 space-y-5 overflow-auto scrollbar-thin">
-      <div>
-        <div className="text-xs uppercase tracking-wider text-muted">Processing queue</div>
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-[24px] font-semibold tracking-tight">Ready for review</h1>
-          <span className="text-sm text-muted">{captured.length} waiting · {processed.length} already reviewed</span>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-muted">Processing queue</div>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-[24px] font-semibold tracking-tight">Ready for review</h1>
+            <span className="text-sm text-muted">{captured.length} waiting · {processed.length} already reviewed</span>
+          </div>
         </div>
+        <button
+          onClick={() => setUploadOpen(true)}
+          className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-foreground text-background text-[13px] font-medium hover:opacity-90"
+        >
+          <Upload className="w-4 h-4" /> Upload invoice
+        </button>
       </div>
+      <UploadInvoiceModal open={uploadOpen} onClose={() => setUploadOpen(false)} />
 
       <Card>
         <CardHeader className="flex items-center justify-between">
