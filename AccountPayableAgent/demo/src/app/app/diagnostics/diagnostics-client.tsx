@@ -42,6 +42,8 @@ export function DiagnosticsClient() {
   const [steps, setSteps] = useState<Step[]>([]);
   const [running, setRunning] = useState(false);
   const [postedBillId, setPostedBillId] = useState<string | null>(null);
+  const [setupBusy, setSetupBusy] = useState(false);
+  const [setupResult, setSetupResult] = useState<{ created: number; existing: number; error?: string } | null>(null);
 
   // On mount, probe each integration so we know up-front what's connected.
   useEffect(() => {
@@ -91,6 +93,25 @@ export function DiagnosticsClient() {
   // is a perfectly legitimate "ok" outcome that the user might still want to
   // see fail explicitly inside the pipeline run.
   const stillLoading = Object.values(probes).some((p) => p.loading);
+
+  async function setupDemoData() {
+    if (setupBusy) return;
+    setSetupBusy(true);
+    setSetupResult(null);
+    try {
+      const res = await fetch("/api/demo/setup", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setSetupResult({
+        created: (data.created ?? []).length,
+        existing: (data.existing ?? []).length,
+      });
+    } catch (e) {
+      setSetupResult({ created: 0, existing: 0, error: (e as Error).message });
+    } finally {
+      setSetupBusy(false);
+    }
+  }
 
   async function runEndToEnd() {
     if (running) return;
@@ -304,17 +325,44 @@ export function DiagnosticsClient() {
         </section>
 
         <section className="bg-white rounded-xl border border-neutral-200">
-          <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between">
+          <div className="px-5 py-3 border-b border-neutral-100 flex items-center justify-between gap-3">
             <span className="text-[12.5px] uppercase tracking-wider text-neutral-500 font-medium">Test scenario</span>
-            <a
-              href="/test-invoice-hvac.pdf"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[12px] text-neutral-500 hover:text-neutral-900 inline-flex items-center gap-1"
-            >
-              View test PDF <ExternalLink className="w-3 h-3" />
-            </a>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={setupDemoData}
+                disabled={setupBusy}
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-[11.5px] font-medium disabled:opacity-50"
+                title="Creates Cornerstone HVAC Services as a vendor in your QuickBooks sandbox so PayablePilot's auto-coding matches the test invoice."
+              >
+                {setupBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                Set up demo vendor
+              </button>
+              <a
+                href="/test-invoice-hvac.pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[12px] text-neutral-500 hover:text-neutral-900 inline-flex items-center gap-1"
+              >
+                View test PDF <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
+          {setupResult && (
+            <div
+              className={
+                "px-5 py-2 text-[12px] border-b border-neutral-100 " +
+                (setupResult.error
+                  ? "bg-rose-50 text-rose-800"
+                  : "bg-emerald-50 text-emerald-800")
+              }
+            >
+              {setupResult.error
+                ? `Setup failed: ${setupResult.error}`
+                : setupResult.created > 0
+                  ? `Created Cornerstone HVAC Services in QuickBooks. Re-run the test to see auto-fill match it.`
+                  : `Cornerstone HVAC Services already exists in QuickBooks — auto-fill will pick it up.`}
+            </div>
+          )}
           <div className="p-5 grid sm:grid-cols-2 gap-4 text-[13px]">
             <Pair label="Vendor" value="Cornerstone HVAC Services" />
             <Pair label="Invoice #" value="CHV-4821" />

@@ -36,13 +36,18 @@ export type CapturedInvoice = {
   currency: string | null;
   lines: CapturedLineItem[];
 
-  // User-mapped to QBO.
+  // User-mapped to QBO. Each picker tracks whether the agent auto-filled it
+  // ("auto") or the user overrode ("manual"). Used to surface "Auto-coded"
+  // badges and to know whether a re-extraction should re-run auto-fill.
   qboVendorId: string | null;
   qboVendorName: string | null;
+  qboVendorSource: "auto" | "manual" | null;
   qboProjectId: string | null;
   qboProjectName: string | null;
+  qboProjectSource: "auto" | "manual" | null;
   qboAccountId: string | null;
   qboAccountName: string | null;
+  qboAccountSource: "auto" | "manual" | null;
 
   // Posting result.
   qboBillId: string | null;

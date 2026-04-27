@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Loader2,
   ArrowRight,
+  Upload,
 } from "lucide-react";
 import type { LiveView } from "../sidebar-live";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import {
   removeCaptured,
   updateCaptured,
 } from "@/lib/captured-store";
+import { UploadInvoiceModalLive } from "../upload-invoice-modal-live";
 
 type Vendor = { Id: string; DisplayName: string };
 type Project = { Id: string; DisplayName: string };
@@ -34,6 +36,7 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [posting, setPosting] = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // Load captured + listen for changes elsewhere in the app.
   useEffect(() => {
@@ -58,18 +61,50 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
     });
   }, []);
 
-  // Auto-suggest a QBO vendor when a captured one has nothing assigned yet.
+  // Auto-coding pass: when reference data lands, fill vendor / project / account
+  // for every untouched captured invoice. The user's manual overrides
+  // (qbo*Source === "manual") are never re-touched.
   useEffect(() => {
-    if (vendors.length === 0 || items.length === 0) return;
+    if (items.length === 0) return;
     items.forEach((it) => {
-      if (it.qboVendorId || !it.vendorName) return;
-      const match = fuzzyVendorMatch(it.vendorName, vendors);
-      if (match) {
-        updateCaptured(it.id, { qboVendorId: match.Id, qboVendorName: match.DisplayName });
+      const patch: Partial<CapturedInvoice> = {};
+
+      // Vendor — fuzzy name match.
+      if (vendors.length > 0 && !it.qboVendorId && it.vendorName) {
+        const match = fuzzyVendorMatch(it.vendorName, vendors);
+        if (match) {
+          patch.qboVendorId = match.Id;
+          patch.qboVendorName = match.DisplayName;
+          patch.qboVendorSource = "auto";
+        }
+      }
+
+      // Project — fuzzy match against the extracted project_ref string.
+      if (projects.length > 0 && !it.qboProjectId && it.projectRefRaw) {
+        const match = fuzzyProjectMatch(it.projectRefRaw, projects);
+        if (match) {
+          patch.qboProjectId = match.Id;
+          patch.qboProjectName = match.DisplayName;
+          patch.qboProjectSource = "auto";
+        }
+      }
+
+      // Expense account — keyword-based suggestion against line-item descriptions.
+      if (accounts.length > 0 && !it.qboAccountId) {
+        const match = suggestAccount(it, accounts);
+        if (match) {
+          patch.qboAccountId = match.Id;
+          patch.qboAccountName = match.Name;
+          patch.qboAccountSource = "auto";
+        }
+      }
+
+      if (Object.keys(patch).length > 0) {
+        updateCaptured(it.id, patch);
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vendors.length, items.length]);
+  }, [vendors.length, projects.length, accounts.length, items.length]);
 
   const reviewable = items.filter((i) => i.status === "extracted" || i.status === "ready" || i.status === "error");
   const posted = items.filter((i) => i.status === "posted");
@@ -130,11 +165,19 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
             <div className="text-xs uppercase tracking-wider text-muted">Bills to post</div>
             <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Review and post to QuickBooks</h1>
             <p className="mt-1 text-sm text-muted max-w-prose">
-              Each row is an invoice extracted from your inbox or upload. Confirm the vendor, project, and expense
-              account, then post. PayablePilot doesn&apos;t pay anything — you release payment from inside QuickBooks.
+              Each row is an invoice from your inbox or a manual upload. PayablePilot has already coded the vendor,
+              project, and expense account where it could — confirm and post. PayablePilot doesn&apos;t pay anything;
+              you release payment from inside QuickBooks.
             </p>
           </div>
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-md bg-foreground text-background text-[13px] font-medium hover:opacity-90 shrink-0"
+          >
+            <Upload className="w-4 h-4" /> Upload invoice
+          </button>
         </div>
+        <UploadInvoiceModalLive open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={() => onNavigate("bills")} />
 
         {reviewable.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-background p-10 text-center">
@@ -163,9 +206,15 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
                 accounts={accounts}
                 posting={posting === it.id}
                 onPost={() => post(it)}
-                onChangeVendor={(id, name) => updateCaptured(it.id, { qboVendorId: id, qboVendorName: name })}
-                onChangeProject={(id, name) => updateCaptured(it.id, { qboProjectId: id, qboProjectName: name })}
-                onChangeAccount={(id, name) => updateCaptured(it.id, { qboAccountId: id, qboAccountName: name })}
+                onChangeVendor={(id, name) =>
+                  updateCaptured(it.id, { qboVendorId: id, qboVendorName: name, qboVendorSource: "manual" })
+                }
+                onChangeProject={(id, name) =>
+                  updateCaptured(it.id, { qboProjectId: id, qboProjectName: name, qboProjectSource: "manual" })
+                }
+                onChangeAccount={(id, name) =>
+                  updateCaptured(it.id, { qboAccountId: id, qboAccountName: name, qboAccountSource: "manual" })
+                }
                 onMarkReady={() => updateCaptured(it.id, { status: "ready" })}
                 onRemove={() => removeCaptured(it.id)}
               />
@@ -251,6 +300,13 @@ function BillRow({
             </span>
             <span className="text-muted text-[13px]">·</span>
             <span className="text-[13px] text-muted">{item.invoiceNumber ?? "no #"}</span>
+            {item.qboVendorSource === "auto" &&
+              item.qboAccountSource === "auto" &&
+              item.status !== "posted" && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-soft text-brand text-[10.5px] font-semibold">
+                  <Sparkles className="w-2.5 h-2.5" /> Auto-coded
+                </span>
+              )}
           </div>
           <div className="mt-0.5 text-[12px] text-muted truncate">
             {item.source.kind === "gmail"
@@ -287,6 +343,7 @@ function BillRow({
               value={item.qboVendorId}
               valueLabel={item.qboVendorName}
               extractedHint={item.vendorName}
+              autoPicked={item.qboVendorSource === "auto"}
               options={vendors.map((v) => ({ id: v.Id, label: v.DisplayName }))}
               onChange={(id, name) => onChangeVendor(id!, name!)}
               emptyMessage="No QuickBooks vendors yet. Connect QBO from settings."
@@ -297,6 +354,7 @@ function BillRow({
               value={item.qboProjectId}
               valueLabel={item.qboProjectName}
               extractedHint={item.projectRefRaw}
+              autoPicked={item.qboProjectSource === "auto"}
               clearable
               options={projects.map((p) => ({ id: p.Id, label: p.DisplayName }))}
               onChange={(id, name) => onChangeProject(id, name)}
@@ -308,6 +366,7 @@ function BillRow({
               required
               value={item.qboAccountId}
               valueLabel={item.qboAccountName}
+              autoPicked={item.qboAccountSource === "auto"}
               options={accounts.map((a) => ({ id: a.Id, label: a.Name }))}
               onChange={(id, name) => onChangeAccount(id!, name!)}
               emptyMessage="No expense accounts. Check QuickBooks chart of accounts."
@@ -407,6 +466,7 @@ function RefPicker({
   value,
   valueLabel,
   extractedHint,
+  autoPicked,
   options,
   onChange,
   required,
@@ -418,6 +478,7 @@ function RefPicker({
   value: string | null | undefined;
   valueLabel: string | null | undefined;
   extractedHint?: string | null;
+  autoPicked?: boolean;
   options: Array<{ id: string; label: string }>;
   onChange: (id: string | null, name: string | null) => void;
   required?: boolean;
@@ -439,11 +500,21 @@ function RefPicker({
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "w-full text-left rounded-md border bg-background hover:bg-surface px-3 py-2 transition-colors",
-          required && !value ? "border-amber-300" : "border-border"
+          autoPicked
+            ? "border-brand/40"
+            : required && !value
+              ? "border-amber-300"
+              : "border-border"
         )}
       >
         <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider text-muted font-medium">
-          {icon} {label} {required && !value && <span className="text-amber-700 ml-auto">required</span>}
+          {icon} {label}
+          {autoPicked && (
+            <span className="ml-auto inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-brand-soft text-brand normal-case tracking-normal text-[10px]">
+              <Sparkles className="w-2.5 h-2.5" /> Auto
+            </span>
+          )}
+          {!autoPicked && required && !value && <span className="text-amber-700 ml-auto">required</span>}
         </div>
         <div className="mt-0.5 text-[13px] truncate">
           {valueLabel ? (
@@ -458,7 +529,7 @@ function RefPicker({
             From invoice: <span className="text-foreground">{extractedHint}</span>
           </div>
         )}
-        {valueLabel && extractedHint && extractedHint.toLowerCase() !== valueLabel.toLowerCase() && (
+        {valueLabel && extractedHint && extractedHint.toLowerCase() !== valueLabel.toLowerCase() && !autoPicked && (
           <div className="text-[11px] text-muted mt-0.5">Invoice said: {extractedHint}</div>
         )}
       </button>
@@ -528,4 +599,74 @@ function fuzzyVendorMatch(extracted: string, vendors: Vendor[]): Vendor | null {
     if (n.includes(target) || target.includes(n)) return v;
   }
   return null;
+}
+
+// Project fuzzy match. The extracted reference is messy ("Job #JOB-2026-0418 ·
+// 418 Maple St HVAC Spring Tune-Up"), so we look for any project whose name
+// shares a meaningful token sequence with the extracted value.
+function fuzzyProjectMatch(extracted: string, projects: Project[]): Project | null {
+  const tokens = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length >= 3);
+  const target = tokens(extracted);
+  if (target.length === 0) return null;
+  let best: { p: Project; score: number } | null = null;
+  for (const p of projects) {
+    const candidate = tokens(p.DisplayName);
+    if (candidate.length === 0) continue;
+    const overlap = candidate.filter((t) => target.includes(t)).length;
+    if (overlap === 0) continue;
+    const score = overlap / Math.min(candidate.length, target.length);
+    if (!best || score > best.score) best = { p, score };
+  }
+  // Require some real overlap before claiming an auto-match.
+  return best && best.score >= 0.4 ? best.p : null;
+}
+
+// Pick an expense account based on what the invoice looks like. Heuristic
+// pass first (HVAC repair → Repairs & Maintenance, etc.), then a sensible
+// fallback so the row is always postable in one click.
+function suggestAccount(invoice: CapturedInvoice, accounts: Account[]): Account | null {
+  if (accounts.length === 0) return null;
+  const text = [
+    invoice.vendorName ?? "",
+    invoice.projectRefRaw ?? "",
+    ...invoice.lines.map((l) => l.description),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  // Ordered list of (description-keyword regex, account-name preference). First
+  // hit wins; within a hit we pick the best-named account that matches.
+  const rules: Array<{ test: RegExp; preferred: RegExp }> = [
+    { test: /\b(hvac|tune.?up|filter|refrigerant|condenser|coil|heating|cooling|repair|service|maintenance|labor)\b/i, preferred: /repair|maintenance/i },
+    { test: /\b(supplies|parts|materials|equipment|hardware)\b/i, preferred: /supplies|materials|parts/i },
+    { test: /\b(office|paper|toner|stationery)\b/i, preferred: /office/i },
+    { test: /\b(software|saas|subscription|license|api)\b/i, preferred: /software|subscription|computer/i },
+    { test: /\b(travel|uber|lyft|airfare|hotel|lodging|mileage)\b/i, preferred: /travel|auto|vehicle/i },
+    { test: /\b(advertising|marketing|ads)\b/i, preferred: /advertis|marketing/i },
+    { test: /\b(rent|lease|sublet)\b/i, preferred: /rent|lease/i },
+    { test: /\b(utility|electric|water|gas|internet|phone|telecom)\b/i, preferred: /utilit|telephone|internet/i },
+    { test: /\b(insurance|premium|coverage)\b/i, preferred: /insurance/i },
+    { test: /\b(legal|attorney|professional|consult|accounting|audit)\b/i, preferred: /professional|legal|consult/i },
+  ];
+
+  for (const r of rules) {
+    if (r.test.test(text)) {
+      const hit = accounts.find((a) => r.preferred.test(a.Name));
+      if (hit) return hit;
+    }
+  }
+
+  // Fallbacks: prefer Repairs & Maintenance, then any account with "expense"
+  // or "supplies" in the name, then the first available expense account.
+  return (
+    accounts.find((a) => /repair|maintenance/i.test(a.Name)) ??
+    accounts.find((a) => /office.?(expense|supplies)/i.test(a.Name)) ??
+    accounts.find((a) => /supplies/i.test(a.Name)) ??
+    accounts[0]
+  );
 }

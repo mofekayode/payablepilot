@@ -22,8 +22,9 @@ const SHOTS = [
   { slug: "05-app-vendors", url: "/app", title: "Workspace · Vendors", click: { sidebarLabel: "Vendors" } },
   { slug: "06-app-projects", url: "/app", title: "Workspace · Projects", click: { sidebarLabel: "Projects" } },
   { slug: "07-settings", url: "/settings", title: "Settings · Integrations + Automation" },
-  { slug: "08-demo-shell", url: "/demo", title: "Guided demo (Greenfield PM)" },
-  { slug: "09-mail", url: "/mail", title: "Vendor mail simulator" },
+  { slug: "08-app-diagnostics", url: "/app/diagnostics", title: "Workspace · Diagnostics" },
+  { slug: "09-demo-shell", url: "/demo", title: "Guided demo (Greenfield PM)" },
+  { slug: "10-mail", url: "/mail", title: "Vendor mail simulator" },
 ];
 
 async function main() {

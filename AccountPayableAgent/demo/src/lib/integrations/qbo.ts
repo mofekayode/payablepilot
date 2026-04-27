@@ -167,6 +167,33 @@ export type CreateBillInput = {
   lines: Array<{ description: string; amount: number; accountId: string }>;
 };
 
+export type CreateVendorInput = {
+  displayName: string;
+  email?: string;
+  webAddr?: string;
+};
+
+export async function createVendor(input: CreateVendorInput): Promise<QboVendor> {
+  const body: Record<string, unknown> = { DisplayName: input.displayName };
+  if (input.email) body.PrimaryEmailAddr = { Address: input.email };
+  if (input.webAddr) body.WebAddr = { URI: input.webAddr };
+  const res = await authedFetch(`/vendor?minorversion=70`, { method: "POST", body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`QBO createVendor failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { Vendor: QboVendor };
+  return data.Vendor;
+}
+
+// Find a vendor by exact (case-insensitive) DisplayName. Used by the demo-setup
+// helper to avoid creating duplicates on repeat clicks.
+export async function findVendorByName(displayName: string): Promise<QboVendor | null> {
+  const res = await authedFetch(
+    `/query?query=${encodeURIComponent(`select * from Vendor where DisplayName = '${displayName.replace(/'/g, "\\'")}'`)}`
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as { QueryResponse?: { Vendor?: QboVendor[] } };
+  return data.QueryResponse?.Vendor?.[0] ?? null;
+}
+
 export async function createBill(input: CreateBillInput): Promise<QboBill> {
   const body = {
     VendorRef: { value: input.vendorId },

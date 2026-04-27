@@ -86,8 +86,13 @@ export async function listInvoiceMessages(opts: { maxResults?: number; days?: nu
   const gmail = await getGmailClient();
   if (!gmail) throw new Error("Gmail is not connected.");
 
-  // Default heuristic: anything with an attachment in the last N days. Caller can override with `query`.
-  const q = query ?? `has:attachment newer_than:${days}d`;
+  // Default heuristic: invoice-flavored attachments only. We don't want to surface
+  // USPS Informed Delivery mail, calendar invites, generic "we sent you a thing"
+  // emails, or anything in the Promotions category. Caller can pass `query` to
+  // bypass this entirely (used by /api/integrations/gmail/messages?q=).
+  const q =
+    query ??
+    `has:attachment newer_than:${days}d (invoice OR receipt OR bill OR statement OR "amount due" OR "payment due" OR "order confirmation") -filename:ics -category:promotions`;
   const list = await gmail.users.messages.list({
     userId: "me",
     q,
