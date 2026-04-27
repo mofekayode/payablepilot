@@ -194,6 +194,19 @@ export async function findVendorByName(displayName: string): Promise<QboVendor |
   return data.QueryResponse?.Vendor?.[0] ?? null;
 }
 
+// Look for an existing Bill on the same vendor with the same DocNumber. Used for
+// duplicate detection — we don't want to post the same invoice twice. Returns
+// the first match (Intuit returns the most recent first by default) or null.
+export async function findExistingBill(vendorId: string, docNumber: string): Promise<QboBill | null> {
+  const safe = docNumber.replace(/'/g, "\\'");
+  const res = await authedFetch(
+    `/query?query=${encodeURIComponent(`select * from Bill where VendorRef = '${vendorId}' and DocNumber = '${safe}'`)}`
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as { QueryResponse?: { Bill?: QboBill[] } };
+  return data.QueryResponse?.Bill?.[0] ?? null;
+}
+
 export async function createBill(input: CreateBillInput): Promise<QboBill> {
   const body = {
     VendorRef: { value: input.vendorId },

@@ -139,6 +139,7 @@ export function UploadInvoiceModalLive({
           qboBillId: null,
           postedAt: null,
           errorMessage: null,
+          duplicateOfBillId: null,
         });
         setDoneFile(file.name);
         setPhase("done");

@@ -9,8 +9,9 @@ A copilot for SMB bookkeepers (initial design partner: an HVAC client doing ~80 
 1. **Ingests** invoices from a connected Gmail mailbox (15-second polling; soon Pub/Sub push) or via manual PDF upload.
 2. **Extracts** vendor, dates, amounts, line items, and project / job references using Claude vision — streamed live so fields populate field-by-field while the model is still generating.
 3. **Auto-codes** every captured invoice: fuzzy-matches the QBO vendor, fuzzy-matches a QBO project from the extracted job ref, and picks an expense account using keyword heuristics. Each picker tracks whether the agent or a human filled it.
-4. **Posts** the bill into QuickBooks Online for the bookkeeper's release. The bookkeeper can review, override any picker, then click Post — or in fully-automatic mode, the agent posts on its own. **Payments themselves are never initiated by PayablePilot** — the bookkeeper releases payment from inside QuickBooks.
-5. **Stays out of your way the rest of the time.** Everything else (chat, agent outbox, reports, compliance, statement reconciliation) shows up in the guided `/demo` route — that surface still exists, but the lean `/app` is what real users live in.
+4. **Detects duplicates** before the bookkeeper can post. As soon as the agent has a vendor + invoice number, it queries QuickBooks for an existing Bill on the same `(VendorRef, DocNumber)` pair. Matches are flagged red, expansion explains it, and the Post button is hard-disabled.
+5. **Posts** the bill into QuickBooks Online for the bookkeeper's release. The bookkeeper can review, override any picker, then click Post — or in fully-automatic mode, the agent posts on its own. **Payments themselves are never initiated by PayablePilot** — the bookkeeper releases payment from inside QuickBooks.
+6. **Stays out of your way the rest of the time.** Everything else (chat, agent outbox, reports, compliance, statement reconciliation) shows up in the guided `/demo` route — that surface still exists, but the lean `/app` is what real users live in.
 
 ## Two surfaces, one codebase
 
@@ -82,6 +83,8 @@ This is where the copilot pitch becomes real. When a captured invoice lands here
 - **Picks an expense account** using keyword heuristics. "HVAC", "tune-up", "filter", "labor", "repair" → prefers QBO accounts named "Repairs & Maintenance". "Supplies", "materials" → "Supplies". And so on, with a fallback to the first available expense account so every row is always postable. Same "Auto" pill.
 
 When all three pickers are auto-filled, the row header gets a small **Auto-coded** badge in brand color next to the vendor/invoice number — that's the visual signal that the agent did the work.
+
+**Duplicate detection.** As soon as a row has both a QBO vendor and an invoice number, the page silently hits `GET /api/integrations/qbo/bills/check?vendorId=…&docNumber=…` which runs `select * from Bill where VendorRef = '…' and DocNumber = '…'` against QBO. If a match comes back, the row's auto-coded badge is replaced with a red **Duplicate** pill, the expanded view shows a banner naming the existing bill ID, and the Post button is hard-disabled. The bookkeeper can either remove the row or change the invoice number if it really is a different bill that happens to share a number.
 
 **The "Upload invoice" button lives directly on this page** (top-right of the section header) so the user can drop an invoice without leaving the bills queue.
 
@@ -228,6 +231,7 @@ On either Inbox or Bills view, click **Upload invoice**. Drag any PDF. Goes thro
 | PDF extraction (streamed) | **Real** — Claude Haiku 4.5 vision via Anthropic SDK, Server-Sent Events |
 | QBO Vendors / Projects / Accounts | **Real** — QBO REST `/v3/.../query` |
 | Posting bills to QBO | **Real** — QBO REST `POST /v3/.../bill` |
+| Duplicate detection before posting | **Real** — QBO REST `select * from Bill where VendorRef = ? and DocNumber = ?`, posting hard-disabled on hit |
 | Auto-coding (vendor / project / account) | Heuristic: vendor + project use fuzzy matching, account uses keyword rules with sensible fallback |
 | Captured-invoice persistence | localStorage (production swap target: Postgres) |
 | Token storage | HTTP-only cookies (production swap target: encrypted DB rows) |
@@ -241,7 +245,6 @@ On either Inbox or Bills view, click **Upload invoice**. Drag any PDF. Goes thro
 - **Forwarding-email intake** (`ap+client123@payablepilot.com`) — Wyatt asked for it. Postmark inbound parse to a webhook is half a day.
 - **Background Gmail sync via Pub/Sub push** instead of client polling — needs GCP Pub/Sub + per-mailbox `users.watch()`. ~1 day.
 - **Multi-tenant data model** — workspaces per client, multiple Gmail mailboxes per workspace, encrypted token storage. ~3 days once a paying customer materializes.
-- **Bill duplicate detection on real data** — currently in-memory inside the demo. Easy to extend by querying QBO for `Bill where DocNumber = ?` before posting.
 - **Confidence indicators on the extraction card** — flag low-confidence fields so the human knows what to verify.
 - **Smarter expense-account suggestion** — the keyword ruleset works; LLM-suggested could do better with vendor history.
 - **Chat agent inside `/app`** — currently lives in `/demo`. Spec pending.

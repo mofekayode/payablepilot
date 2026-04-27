@@ -53,6 +53,10 @@ export type CapturedInvoice = {
   qboBillId: string | null;
   postedAt: string | null;
   errorMessage: string | null;
+
+  // Duplicate-detection cache. Set when we've found an existing bill in QBO
+  // matching (vendorId, invoiceNumber). Posting is blocked while this is set.
+  duplicateOfBillId: string | null;
 };
 
 const KEY = "pp_captured_v1";

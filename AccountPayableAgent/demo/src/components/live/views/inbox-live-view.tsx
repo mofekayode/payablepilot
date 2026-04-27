@@ -277,6 +277,7 @@ function MessageDetail({
       qboBillId: null,
       postedAt: null,
       errorMessage: null,
+      duplicateOfBillId: null,
     });
     setSavedAttachmentIds((s) => new Set(s).add(attachmentId));
     onSavedExtraction(meta);

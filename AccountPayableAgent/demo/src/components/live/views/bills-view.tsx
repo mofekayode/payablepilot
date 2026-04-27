@@ -106,6 +106,32 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendors.length, projects.length, accounts.length, items.length]);
 
+  // Duplicate-detection pass: for each captured row that has both a QBO vendor
+  // and an extracted invoice number, ask QBO whether a Bill already exists on
+  // that pair. We only check rows we haven't already classified to avoid
+  // hammering the API on every render.
+  useEffect(() => {
+    items.forEach(async (it) => {
+      if (it.status === "posted") return;
+      if (!it.qboVendorId || !it.invoiceNumber) return;
+      // Already checked.
+      if (it.duplicateOfBillId !== null && it.duplicateOfBillId !== undefined) return;
+      try {
+        const url = new URL("/api/integrations/qbo/bills/check", window.location.origin);
+        url.searchParams.set("vendorId", it.qboVendorId);
+        url.searchParams.set("docNumber", it.invoiceNumber);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { existing?: { Id?: string } | null };
+        const dupId = data.existing?.Id ?? null;
+        if (dupId) updateCaptured(it.id, { duplicateOfBillId: dupId });
+      } catch {
+        /* swallow — duplicate check is best-effort */
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.map((i) => `${i.id}:${i.qboVendorId ?? ""}:${i.invoiceNumber ?? ""}`).join("|")]);
+
   const reviewable = items.filter((i) => i.status === "extracted" || i.status === "ready" || i.status === "error");
   const posted = items.filter((i) => i.status === "posted");
 
@@ -113,6 +139,7 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
     if (!it.qboVendorId) return;
     if (it.lines.length === 0 && it.total == null) return;
     if (!it.qboAccountId) return;
+    if (it.duplicateOfBillId) return;
     setPosting(it.id);
     try {
       const lines =
@@ -285,7 +312,11 @@ function BillRow({
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(item.status === "extracted");
-  const isPostable = !!item.qboVendorId && !!item.qboAccountId && (item.total != null || item.lines.length > 0);
+  const isPostable =
+    !!item.qboVendorId &&
+    !!item.qboAccountId &&
+    (item.total != null || item.lines.length > 0) &&
+    !item.duplicateOfBillId;
   const fmt = (n: number | null) =>
     n == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: item.currency || "USD" }).format(n);
 
@@ -300,13 +331,19 @@ function BillRow({
             </span>
             <span className="text-muted text-[13px]">·</span>
             <span className="text-[13px] text-muted">{item.invoiceNumber ?? "no #"}</span>
-            {item.qboVendorSource === "auto" &&
+            {item.duplicateOfBillId ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200 text-[10.5px] font-semibold">
+                <AlertCircle className="w-2.5 h-2.5" /> Duplicate
+              </span>
+            ) : (
+              item.qboVendorSource === "auto" &&
               item.qboAccountSource === "auto" &&
               item.status !== "posted" && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-soft text-brand text-[10.5px] font-semibold">
                   <Sparkles className="w-2.5 h-2.5" /> Auto-coded
                 </span>
-              )}
+              )
+            )}
           </div>
           <div className="mt-0.5 text-[12px] text-muted truncate">
             {item.source.kind === "gmail"
@@ -329,6 +366,18 @@ function BillRow({
 
       {expanded && (
         <div className="border-t border-border p-5 space-y-4 bg-surface/40">
+          {item.duplicateOfBillId && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold">Duplicate of bill #{item.duplicateOfBillId} in QuickBooks.</div>
+                <div className="mt-0.5 text-rose-700/90">
+                  This vendor + invoice number combination is already on file. Posting blocked. Remove this row, or
+                  change the invoice number if this is genuinely a different bill.
+                </div>
+              </div>
+            </div>
+          )}
           {item.errorMessage && (
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {item.errorMessage}
@@ -425,7 +474,13 @@ function BillRow({
                     ? "bg-surface text-muted border border-border cursor-not-allowed"
                     : "bg-emerald-600 text-white hover:bg-emerald-700"
                 )}
-                title={!isPostable ? "Pick a vendor and an expense account first" : "Post this bill to QuickBooks"}
+                title={
+                  item.duplicateOfBillId
+                    ? "Already in QuickBooks — posting blocked"
+                    : !isPostable
+                      ? "Pick a vendor and an expense account first"
+                      : "Post this bill to QuickBooks"
+                }
               >
                 {posting ? (
                   <>
