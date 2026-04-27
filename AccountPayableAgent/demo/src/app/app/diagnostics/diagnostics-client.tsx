@@ -36,7 +36,7 @@ export function DiagnosticsClient() {
     qboVendors: { label: "QuickBooks · vendors", ok: false, detail: "checking…", loading: true },
     qboProjects: { label: "QuickBooks · projects", ok: false, detail: "checking…", loading: true },
     qboAccounts: { label: "QuickBooks · expense accounts", ok: false, detail: "checking…", loading: true },
-    anthropic: { label: "Claude · API key configured", ok: false, detail: "(verified server-side at run time)" },
+    anthropic: { label: "Claude · API key configured", ok: false, detail: "checking…", loading: true },
   });
 
   const [steps, setSteps] = useState<Step[]>([]);
@@ -80,6 +80,7 @@ export function DiagnosticsClient() {
     probe("qboAccounts", "/api/integrations/qbo/accounts", (d) =>
       `${((d as { accounts?: unknown[] }).accounts ?? []).length} expense accounts`
     );
+    probe("anthropic", "/api/extract/health", (d) => `model: ${(d as { model?: string }).model ?? "default"}`);
     return () => {
       cancelled = true;
     };

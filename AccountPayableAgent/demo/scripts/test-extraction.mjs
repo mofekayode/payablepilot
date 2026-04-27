@@ -26,26 +26,10 @@ async function loadEnv() {
   return out;
 }
 
-const SYSTEM_PROMPT = `You extract structured invoice data from PDFs and images.
-You will be given an invoice document. Return a single JSON object with these fields:
-{
-  "vendor_name": string or null,
-  "vendor_email": string or null,
-  "invoice_number": string or null,
-  "issue_date": "YYYY-MM-DD" or null,
-  "due_date": "YYYY-MM-DD" or null,
-  "po_number": string or null,
-  "project_ref": string or null,
-  "subtotal": number or null,
-  "tax": number or null,
-  "total": number or null,
-  "currency": ISO 4217 code or null,
-  "line_items": [{ "description": string, "quantity": number or null, "unit_price": number or null, "amount": number or null, "project_ref": string or null }],
-  "raw_text_snippet": short string summarizing the document or null
-}
-Output JSON only. Use null for fields you cannot find. Money values plain numbers without currency symbols.
-"project_ref" should capture any job number, project name, customer reference, property address, unit number, or work
-order id mentioned. Trim whitespace and normalize dates to YYYY-MM-DD.`;
+// Mirrors src/lib/integrations/extract.ts so test reflects production prompt.
+const SYSTEM_PROMPT = `Extract invoice fields from the PDF. Return only this JSON, no prose, no code fences:
+{"vendor_name":string|null,"vendor_email":string|null,"invoice_number":string|null,"issue_date":"YYYY-MM-DD"|null,"due_date":"YYYY-MM-DD"|null,"po_number":string|null,"project_ref":string|null,"subtotal":number|null,"tax":number|null,"total":number|null,"currency":string|null,"line_items":[{"description":string,"quantity":number|null,"unit_price":number|null,"amount":number|null,"project_ref":string|null}],"raw_text_snippet":string|null}
+Rules: null for missing fields, never invent. project_ref = any job number, project, customer reference, property/unit/work order id (critical for construction/HVAC). Money as plain numbers. Dates as YYYY-MM-DD.`;
 
 function check(label, predicate, actual) {
   const ok = !!predicate;
@@ -68,7 +52,7 @@ async function main() {
     console.error("✗ ANTHROPIC_API_KEY missing from .env.local");
     process.exit(1);
   }
-  const model = env.ANTHROPIC_MODEL || "claude-opus-4-7";
+  const model = env.ANTHROPIC_MODEL || "claude-haiku-4-5";
   console.log(`Model: ${model}`);
 
   const pdf = await readFile(PDF_PATH);
@@ -79,7 +63,7 @@ async function main() {
   const t0 = Date.now();
   const message = await client.messages.create({
     model,
-    max_tokens: 2048,
+    max_tokens: 1500,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -89,7 +73,7 @@ async function main() {
             type: "document",
             source: { type: "base64", media_type: "application/pdf", data: base64 },
           },
-          { type: "text", text: "Extract the invoice fields. JSON only." },
+          { type: "text", text: "Extract fields. JSON only." },
         ],
       },
     ],

@@ -27,41 +27,24 @@ export type ExtractedInvoice = {
   raw_text_snippet: string | null;
 };
 
-const SYSTEM_PROMPT = `You extract structured invoice data from PDFs and images.
-You will be given an invoice document. Return a single JSON object with these fields:
-{
-  "vendor_name": string or null,
-  "vendor_email": string or null,
-  "invoice_number": string or null,
-  "issue_date": "YYYY-MM-DD" or null,
-  "due_date": "YYYY-MM-DD" or null,
-  "po_number": string or null,
-  "project_ref": string or null,
-  "subtotal": number or null,
-  "tax": number or null,
-  "total": number or null,
-  "currency": ISO 4217 code or null,
-  "line_items": [{ "description": string, "quantity": number or null, "unit_price": number or null, "amount": number or null, "project_ref": string or null }],
-  "raw_text_snippet": short string summarizing the document or null
-}
-
-Rules:
-- Output JSON only. No prose, no code fences, no commentary.
-- Use null for fields you cannot find. Do NOT invent values.
-- "project_ref" should capture any job number, project name, customer reference, property address, unit number, or work order id mentioned. Construction/HVAC/trades invoices often include this.
-- Money values are plain numbers without currency symbols. Use the currency field for the unit.
-- Trim whitespace and normalize dates to YYYY-MM-DD.`;
+// Tight prompt — Claude Haiku follows structured-extraction instructions reliably with this version.
+const SYSTEM_PROMPT = `Extract invoice fields from the PDF. Return only this JSON, no prose, no code fences:
+{"vendor_name":string|null,"vendor_email":string|null,"invoice_number":string|null,"issue_date":"YYYY-MM-DD"|null,"due_date":"YYYY-MM-DD"|null,"po_number":string|null,"project_ref":string|null,"subtotal":number|null,"tax":number|null,"total":number|null,"currency":string|null,"line_items":[{"description":string,"quantity":number|null,"unit_price":number|null,"amount":number|null,"project_ref":string|null}],"raw_text_snippet":string|null}
+Rules: null for missing fields, never invent. project_ref = any job number, project, customer reference, property/unit/work order id (critical for construction/HVAC). Money as plain numbers. Dates as YYYY-MM-DD.`;
 
 export async function extractInvoiceFromPdf(pdfBase64: string): Promise<ExtractedInvoice> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured.");
-  const model = process.env.ANTHROPIC_MODEL ?? "claude-opus-4-7";
+  // Default to Haiku 4.5 — 2-3x faster than Opus, plenty capable for structured extraction.
+  // Override per-deployment via ANTHROPIC_MODEL if you want Sonnet/Opus accuracy.
+  const model = process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5";
 
   const client = new Anthropic({ apiKey });
 
   const message = await client.messages.create({
     model,
-    max_tokens: 2048,
+    // Real invoices rarely need >1200 tokens of JSON. Shorter cap = faster decode.
+    max_tokens: 1500,
     system: SYSTEM_PROMPT,
     messages: [
       {
@@ -71,7 +54,7 @@ export async function extractInvoiceFromPdf(pdfBase64: string): Promise<Extracte
             type: "document",
             source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
           },
-          { type: "text", text: "Extract the invoice fields. JSON only." },
+          { type: "text", text: "Extract fields. JSON only." },
         ],
       },
     ],

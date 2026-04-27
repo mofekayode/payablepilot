@@ -130,12 +130,20 @@ export async function listBills(limit = 25): Promise<QboBill[]> {
 }
 
 export async function listProjects(limit = 50): Promise<QboProject[]> {
-  // Projects are Customers with IsProject=true. Some sandbox companies have IsProject feature off,
-  // in which case this returns []. The UI handles empty gracefully.
+  // Projects are Customers with IsProject=true. Some QBO companies don't have the
+  // Projects feature enabled at all — the IsProject property literally doesn't exist
+  // in their schema and this query 400s with "Property IsProject not found for Entity Customer".
+  // Treat that as "no projects available" rather than an error.
   const res = await authedFetch(
     `/query?query=${encodeURIComponent(`select Id, DisplayName, ParentRef, Active from Customer where IsProject = true and Active = true maxresults ${limit}`)}`
   );
-  if (!res.ok) throw new Error(`QBO listProjects failed: ${res.status} ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    if (res.status === 400 && /IsProject not found/i.test(text)) {
+      return [];
+    }
+    throw new Error(`QBO listProjects failed: ${res.status} ${text}`);
+  }
   const data = (await res.json()) as { QueryResponse?: { Customer?: QboProject[] } };
   return data.QueryResponse?.Customer ?? [];
 }
