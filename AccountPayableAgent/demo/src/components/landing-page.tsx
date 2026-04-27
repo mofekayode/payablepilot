@@ -356,7 +356,7 @@ function InteractiveTour() {
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              href="/app"
+              href="/demo"
               className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-foreground text-background hover:opacity-90"
             >
               Drive the live product
@@ -620,7 +620,7 @@ function Footer() {
           <a className="hover:text-foreground" href="#">Terms</a>
           <a className="hover:text-foreground" href="#">Security</a>
           <Link href="/tour" className="hover:text-foreground">Tour</Link>
-          <Link href="/app" className="hover:text-foreground">Live product</Link>
+          <Link href="/demo" className="hover:text-foreground">Live product</Link>
         </div>
       </div>
     </footer>

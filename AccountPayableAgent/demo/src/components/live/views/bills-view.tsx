@@ -1,0 +1,531 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  CreditCard,
+  Sparkles,
+  Trash2,
+  ChevronDown,
+  Briefcase,
+  Tag,
+  User,
+  Check,
+  AlertCircle,
+  Loader2,
+  ArrowRight,
+} from "lucide-react";
+import type { LiveView } from "../sidebar-live";
+import { cn } from "@/lib/utils";
+import {
+  CapturedInvoice,
+  loadCaptured,
+  removeCaptured,
+  updateCaptured,
+} from "@/lib/captured-store";
+
+type Vendor = { Id: string; DisplayName: string };
+type Project = { Id: string; DisplayName: string };
+type Account = { Id: string; Name: string; AccountType?: string };
+
+export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void }) {
+  const [items, setItems] = useState<CapturedInvoice[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [posting, setPosting] = useState<string | null>(null);
+
+  // Load captured + listen for changes elsewhere in the app.
+  useEffect(() => {
+    function refresh() {
+      setItems(loadCaptured());
+    }
+    refresh();
+    window.addEventListener("pp:captured:changed", refresh);
+    return () => window.removeEventListener("pp:captured:changed", refresh);
+  }, [refreshKey]);
+
+  // Pull QBO reference data once.
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/integrations/qbo/vendors").then((r) => (r.ok ? r.json() : { vendors: [] })),
+      fetch("/api/integrations/qbo/projects").then((r) => (r.ok ? r.json() : { projects: [] })),
+      fetch("/api/integrations/qbo/accounts").then((r) => (r.ok ? r.json() : { accounts: [] })),
+    ]).then(([v, p, a]) => {
+      setVendors(v.vendors ?? []);
+      setProjects(p.projects ?? []);
+      setAccounts(a.accounts ?? []);
+    });
+  }, []);
+
+  // Auto-suggest a QBO vendor when a captured one has nothing assigned yet.
+  useEffect(() => {
+    if (vendors.length === 0 || items.length === 0) return;
+    items.forEach((it) => {
+      if (it.qboVendorId || !it.vendorName) return;
+      const match = fuzzyVendorMatch(it.vendorName, vendors);
+      if (match) {
+        updateCaptured(it.id, { qboVendorId: match.Id, qboVendorName: match.DisplayName });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendors.length, items.length]);
+
+  const reviewable = items.filter((i) => i.status === "extracted" || i.status === "ready" || i.status === "error");
+  const posted = items.filter((i) => i.status === "posted");
+
+  const post = async (it: CapturedInvoice) => {
+    if (!it.qboVendorId) return;
+    if (it.lines.length === 0 && it.total == null) return;
+    if (!it.qboAccountId) return;
+    setPosting(it.id);
+    try {
+      const lines =
+        it.lines.length > 0
+          ? it.lines.map((li) => ({
+              description: li.description || it.invoiceNumber || "Invoice",
+              amount: li.amount ?? li.unitPrice ?? 0,
+              accountId: it.qboAccountId!,
+            }))
+          : [
+              {
+                description: it.invoiceNumber ?? "Invoice",
+                amount: it.total ?? 0,
+                accountId: it.qboAccountId!,
+              },
+            ];
+      const res = await fetch("/api/integrations/qbo/bills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorId: it.qboVendorId,
+          txnDate: it.issueDate ?? new Date().toISOString().slice(0, 10),
+          docNumber: it.invoiceNumber ?? undefined,
+          projectId: it.qboProjectId ?? undefined,
+          lines,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      updateCaptured(it.id, {
+        status: "posted",
+        qboBillId: data.bill?.Id ?? null,
+        postedAt: new Date().toISOString(),
+        errorMessage: null,
+      });
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      updateCaptured(it.id, { status: "error", errorMessage: (e as Error).message });
+      setRefreshKey((k) => k + 1);
+    } finally {
+      setPosting(null);
+    }
+  };
+
+  return (
+    <div className="h-full overflow-auto scrollbar-thin">
+      <div className="max-w-[1200px] mx-auto px-8 py-8 space-y-6">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted">Bills to post</div>
+            <h1 className="mt-1 text-[26px] font-semibold tracking-tight">Review and post to QuickBooks</h1>
+            <p className="mt-1 text-sm text-muted max-w-prose">
+              Each row is an invoice extracted from your inbox or upload. Confirm the vendor, project, and expense
+              account, then post. PayablePilot doesn&apos;t pay anything — you release payment from inside QuickBooks.
+            </p>
+          </div>
+        </div>
+
+        {reviewable.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border bg-background p-10 text-center">
+            <div className="text-[15px] font-medium mb-1">Nothing in the queue.</div>
+            <div className="text-[13px] text-muted max-w-md mx-auto">
+              Open the inbox and click Extract on a PDF, or upload one manually. Once extracted, the bill lands here for
+              your review.
+            </div>
+            <button
+              onClick={() => onNavigate("inbox")}
+              className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-foreground text-background text-[13px] font-medium hover:opacity-90"
+            >
+              Open inbox <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {reviewable.length > 0 && (
+          <div className="space-y-3">
+            {reviewable.map((it) => (
+              <BillRow
+                key={it.id}
+                item={it}
+                vendors={vendors}
+                projects={projects}
+                accounts={accounts}
+                posting={posting === it.id}
+                onPost={() => post(it)}
+                onChangeVendor={(id, name) => updateCaptured(it.id, { qboVendorId: id, qboVendorName: name })}
+                onChangeProject={(id, name) => updateCaptured(it.id, { qboProjectId: id, qboProjectName: name })}
+                onChangeAccount={(id, name) => updateCaptured(it.id, { qboAccountId: id, qboAccountName: name })}
+                onMarkReady={() => updateCaptured(it.id, { status: "ready" })}
+                onRemove={() => removeCaptured(it.id)}
+              />
+            ))}
+          </div>
+        )}
+
+        {posted.length > 0 && (
+          <div className="bg-background rounded-xl border border-border overflow-hidden">
+            <div className="px-5 py-3 border-b border-border flex items-center gap-2 text-sm font-medium">
+              <Check className="w-4 h-4 text-emerald-600" />
+              Posted to QuickBooks ({posted.length})
+            </div>
+            <ul>
+              {posted.map((it) => (
+                <li key={it.id} className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0">
+                  <div className="w-8 h-8 rounded bg-emerald-50 text-emerald-700 grid place-items-center shrink-0">
+                    <Check className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13.5px] font-medium truncate">
+                      {it.qboVendorName ?? it.vendorName ?? "Unknown vendor"} · {it.invoiceNumber ?? "—"}
+                    </div>
+                    <div className="text-[11.5px] text-muted truncate">
+                      Bill #{it.qboBillId} · {it.qboAccountName ?? "GL"}
+                      {it.qboProjectName ? ` · ${it.qboProjectName}` : ""} · posted{" "}
+                      {it.postedAt ? new Date(it.postedAt).toLocaleString() : ""}
+                    </div>
+                  </div>
+                  <div className="text-[13px] font-semibold tabular-nums">
+                    {it.total != null
+                      ? new Intl.NumberFormat("en-US", { style: "currency", currency: it.currency || "USD" }).format(it.total)
+                      : "—"}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BillRow({
+  item,
+  vendors,
+  projects,
+  accounts,
+  posting,
+  onPost,
+  onChangeVendor,
+  onChangeProject,
+  onChangeAccount,
+  onMarkReady,
+  onRemove,
+}: {
+  item: CapturedInvoice;
+  vendors: Vendor[];
+  projects: Project[];
+  accounts: Account[];
+  posting: boolean;
+  onPost: () => void;
+  onChangeVendor: (id: string, name: string) => void;
+  onChangeProject: (id: string | null, name: string | null) => void;
+  onChangeAccount: (id: string, name: string) => void;
+  onMarkReady: () => void;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(item.status === "extracted");
+  const isPostable = !!item.qboVendorId && !!item.qboAccountId && (item.total != null || item.lines.length > 0);
+  const fmt = (n: number | null) =>
+    n == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: item.currency || "USD" }).format(n);
+
+  return (
+    <div className="bg-background rounded-xl border border-border overflow-hidden">
+      <div className="px-5 py-3 flex items-center gap-3">
+        <StatusBadge status={item.status} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[14px] font-semibold truncate">
+              {item.qboVendorName ?? item.vendorName ?? "Vendor unknown"}
+            </span>
+            <span className="text-muted text-[13px]">·</span>
+            <span className="text-[13px] text-muted">{item.invoiceNumber ?? "no #"}</span>
+          </div>
+          <div className="mt-0.5 text-[12px] text-muted truncate">
+            {item.source.kind === "gmail"
+              ? `From ${item.source.fromName || item.source.fromEmail}`
+              : `Uploaded ${item.source.fileName}`}
+            {item.issueDate ? ` · issued ${item.issueDate}` : ""}
+            {item.dueDate ? ` · due ${item.dueDate}` : ""}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-[15px] font-semibold tabular-nums">{fmt(item.total)}</div>
+        </div>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="ml-2 text-muted hover:text-foreground p-1.5 rounded"
+        >
+          <ChevronDown className={cn("w-4 h-4 transition-transform", expanded && "rotate-180")} />
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="border-t border-border p-5 space-y-4 bg-surface/40">
+          {item.errorMessage && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {item.errorMessage}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <RefPicker
+              icon={<User className="w-3.5 h-3.5" />}
+              label="Vendor"
+              required
+              value={item.qboVendorId}
+              valueLabel={item.qboVendorName}
+              extractedHint={item.vendorName}
+              options={vendors.map((v) => ({ id: v.Id, label: v.DisplayName }))}
+              onChange={(id, name) => onChangeVendor(id!, name!)}
+              emptyMessage="No QuickBooks vendors yet. Connect QBO from settings."
+            />
+            <RefPicker
+              icon={<Briefcase className="w-3.5 h-3.5" />}
+              label="Project / Job"
+              value={item.qboProjectId}
+              valueLabel={item.qboProjectName}
+              extractedHint={item.projectRefRaw}
+              clearable
+              options={projects.map((p) => ({ id: p.Id, label: p.DisplayName }))}
+              onChange={(id, name) => onChangeProject(id, name)}
+              emptyMessage="No projects in QuickBooks. Enable Projects (Settings → Account → Advanced) and refresh."
+            />
+            <RefPicker
+              icon={<Tag className="w-3.5 h-3.5" />}
+              label="Expense account"
+              required
+              value={item.qboAccountId}
+              valueLabel={item.qboAccountName}
+              options={accounts.map((a) => ({ id: a.Id, label: a.Name }))}
+              onChange={(id, name) => onChangeAccount(id!, name!)}
+              emptyMessage="No expense accounts. Check QuickBooks chart of accounts."
+            />
+          </div>
+
+          {item.lines.length > 0 && (
+            <div className="rounded-lg border border-border bg-background overflow-hidden">
+              <div className="px-3 py-2 border-b border-border text-[11px] uppercase tracking-wider text-muted font-medium flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-brand" /> Extracted line items ({item.lines.length})
+              </div>
+              <ul>
+                {item.lines.slice(0, 6).map((li, i) => (
+                  <li key={i} className="flex items-start gap-3 px-3 py-2 border-b border-border last:border-0 text-[12.5px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate">{li.description}</div>
+                      {li.projectRef && (
+                        <div className="text-[11px] text-brand font-medium">Job ref: {li.projectRef}</div>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0 tabular-nums w-24 text-muted">
+                      {li.quantity != null && `${li.quantity} ×`} {li.unitPrice != null && fmt(li.unitPrice)}
+                    </div>
+                    <div className="text-right shrink-0 tabular-nums w-24">{fmt(li.amount)}</div>
+                  </li>
+                ))}
+                {item.lines.length > 6 && (
+                  <li className="px-3 py-2 text-[11.5px] text-muted">+{item.lines.length - 6} more</li>
+                )}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={onRemove}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-[12px] text-muted hover:text-rose-700"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Remove
+            </button>
+            <div className="flex items-center gap-2">
+              {item.status === "extracted" && (
+                <button
+                  onClick={onMarkReady}
+                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-surface"
+                >
+                  Mark ready
+                </button>
+              )}
+              <button
+                onClick={onPost}
+                disabled={!isPostable || posting}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-[12.5px] font-medium",
+                  !isPostable || posting
+                    ? "bg-surface text-muted border border-border cursor-not-allowed"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                )}
+                title={!isPostable ? "Pick a vendor and an expense account first" : "Post this bill to QuickBooks"}
+              >
+                {posting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Posting…
+                  </>
+                ) : (
+                  <>
+                    Post bill to QuickBooks <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: CapturedInvoice["status"] }) {
+  const map: Record<CapturedInvoice["status"], { tone: string; label: string }> = {
+    extracted: { tone: "bg-brand-soft text-brand", label: "Extracted" },
+    ready: { tone: "bg-amber-100 text-amber-900", label: "Ready" },
+    posted: { tone: "bg-emerald-100 text-emerald-800", label: "Posted" },
+    error: { tone: "bg-rose-100 text-rose-800", label: "Error" },
+  };
+  const v = map[status];
+  return (
+    <span className={cn("inline-flex items-center text-[10.5px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded", v.tone)}>
+      {v.label}
+    </span>
+  );
+}
+
+function RefPicker({
+  icon,
+  label,
+  value,
+  valueLabel,
+  extractedHint,
+  options,
+  onChange,
+  required,
+  clearable,
+  emptyMessage,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | null | undefined;
+  valueLabel: string | null | undefined;
+  extractedHint?: string | null;
+  options: Array<{ id: string; label: string }>;
+  onChange: (id: string | null, name: string | null) => void;
+  required?: boolean;
+  clearable?: boolean;
+  emptyMessage?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+  const filtered = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return options.slice(0, 50);
+    return options.filter((o) => o.label.toLowerCase().includes(q)).slice(0, 50);
+  }, [options, filter]);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "w-full text-left rounded-md border bg-background hover:bg-surface px-3 py-2 transition-colors",
+          required && !value ? "border-amber-300" : "border-border"
+        )}
+      >
+        <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider text-muted font-medium">
+          {icon} {label} {required && !value && <span className="text-amber-700 ml-auto">required</span>}
+        </div>
+        <div className="mt-0.5 text-[13px] truncate">
+          {valueLabel ? (
+            <span className="font-medium">{valueLabel}</span>
+          ) : (
+            <span className="text-muted">— pick {label.toLowerCase()}</span>
+          )}
+        </div>
+        {extractedHint && !valueLabel && (
+          <div className="text-[11px] text-muted mt-0.5">
+            <Sparkles className="w-2.5 h-2.5 inline-block mr-1 text-brand" />
+            From invoice: <span className="text-foreground">{extractedHint}</span>
+          </div>
+        )}
+        {valueLabel && extractedHint && extractedHint.toLowerCase() !== valueLabel.toLowerCase() && (
+          <div className="text-[11px] text-muted mt-0.5">Invoice said: {extractedHint}</div>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute top-full mt-1 left-0 right-0 z-40 rounded-md border border-border bg-background shadow-[0_12px_32px_rgba(15,23,42,0.18)] overflow-hidden">
+            <input
+              autoFocus
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={`Search ${label.toLowerCase()}…`}
+              className="w-full px-3 py-2 text-[13px] outline-none border-b border-border bg-background"
+            />
+            {clearable && value && (
+              <button
+                onClick={() => {
+                  onChange(null, null);
+                  setOpen(false);
+                }}
+                className="w-full px-3 py-2 text-left text-[12.5px] text-rose-700 hover:bg-rose-50 border-b border-border"
+              >
+                Clear assignment
+              </button>
+            )}
+            {options.length === 0 && (
+              <div className="px-3 py-3 text-[12.5px] text-muted">{emptyMessage ?? "No options"}</div>
+            )}
+            <ul className="max-h-[280px] overflow-auto">
+              {filtered.map((o) => {
+                const selected = o.id === value;
+                return (
+                  <li key={o.id}>
+                    <button
+                      onClick={() => {
+                        onChange(o.id, o.label);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "w-full text-left px-3 py-2 text-[13px] hover:bg-surface",
+                        selected && "bg-brand-soft text-foreground font-medium"
+                      )}
+                    >
+                      {o.label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function fuzzyVendorMatch(extracted: string, vendors: Vendor[]): Vendor | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const target = norm(extracted);
+  if (!target) return null;
+  // Exact normalized match wins.
+  for (const v of vendors) if (norm(v.DisplayName) === target) return v;
+  // Otherwise prefer the candidate whose normalized form contains the target.
+  for (const v of vendors) {
+    const n = norm(v.DisplayName);
+    if (n.includes(target) || target.includes(n)) return v;
+  }
+  return null;
+}

@@ -1,10 +1,10 @@
-import { AppShell } from "@/components/app-shell";
+import { AppShellLive } from "@/components/live/app-shell-live";
 
 export const metadata = {
-  title: "PayablePilot · Demo",
-  description: "Live walkthrough of the PayablePilot AP agent.",
+  title: "PayablePilot · Workspace",
+  description: "Your live AP workspace — connected to Gmail and QuickBooks Online.",
 };
 
 export default function App() {
-  return <AppShell />;
+  return <AppShellLive />;
 }
