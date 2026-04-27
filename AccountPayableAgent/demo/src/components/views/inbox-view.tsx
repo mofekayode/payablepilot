@@ -421,9 +421,6 @@ function ExtractedFields({ data }: { data: ExtractedInvoice }) {
   return (
     <div className="px-4 pb-4 pt-1 bg-surface/60">
       <div className="rounded-lg border border-brand/30 bg-background overflow-hidden">
-        <div className="px-4 py-2 bg-brand-soft border-b border-brand/20 flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold text-brand">
-          <Sparkles className="w-3 h-3" /> Extracted by Claude
-        </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-[13px]">
           <FieldRow label="Vendor" value={data.vendor_name} />
           <FieldRow label="Vendor email" value={data.vendor_email} />

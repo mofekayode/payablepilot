@@ -52,8 +52,8 @@ export function DashboardView({
             {conn.gmail && conn.qbo ? "You're connected. Let's process some bills." : "Almost ready — connect your accounts to start."}
           </h1>
           <p className="mt-1 text-sm text-muted max-w-prose">
-            PayablePilot reads invoices from your Gmail, extracts the fields with Claude, and posts the bills directly to
-            QuickBooks for your approval.
+            PayablePilot reads invoices from your Gmail, extracts the fields automatically, and posts the bills directly
+            to QuickBooks for your approval.
           </p>
         </div>
 
@@ -93,7 +93,7 @@ export function DashboardView({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <ActionCard
             title="Live inbox"
-            body="See new attachment-bearing emails from your Gmail. Click any PDF to extract its fields with Claude."
+            body="See new attachment-bearing emails from your Gmail. Click any PDF to auto-extract its fields."
             cta="Open inbox"
             icon={<InboxIcon className="w-5 h-5" />}
             onClick={() => onNavigate("inbox")}

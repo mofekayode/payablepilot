@@ -221,7 +221,7 @@ export function UploadInvoiceModalLive({
                   <Sparkles className="w-6 h-6 animate-pulse" />
                 </div>
                 <div className="mt-3 text-[14px] font-medium">
-                  {phase === "uploading" ? "Reading file…" : "Claude is extracting fields…"}
+                  {phase === "uploading" ? "Reading file…" : "Extracting invoice fields…"}
                 </div>
                 <div className="mt-1 text-[12px] text-muted">Vendor, line items, totals, project reference.</div>
               </>

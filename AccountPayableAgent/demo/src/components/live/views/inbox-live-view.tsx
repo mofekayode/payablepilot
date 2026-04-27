@@ -62,10 +62,12 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
 
   useEffect(() => {
     fetchMessages();
-    // Poll every 15 seconds while the inbox is open. Real product wants Gmail
-    // Pub/Sub push, but for the demo this is plenty — a forwarded email shows
-    // up automatically within ~15s without the user touching anything.
-    const interval = setInterval(fetchMessages, 15_000);
+    // Poll every 3 seconds while the inbox is open. ~130 quota units per refresh
+    // (1 list + 25 detail fetches) → ~43 units/sec, comfortably under Gmail's
+    // 250/sec per-user cap. Real product wants Gmail Pub/Sub push instead, but
+    // this is plenty for the demo and gets a forwarded email on screen within
+    // ~3 seconds of arrival.
+    const interval = setInterval(fetchMessages, 3_000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -381,15 +383,17 @@ function ExtractedFields({
   return (
     <div className="px-4 pb-4 pt-1 bg-surface/50">
       <div className="rounded-lg border border-brand/30 bg-background overflow-hidden">
-        <div className="px-4 py-2 bg-brand-soft border-b border-brand/20 flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold text-brand">
-          <Sparkles className={cn("w-3 h-3", streaming && "animate-pulse")} />
-          {streaming ? "Extracting with Claude…" : "Extracted by Claude"}
-          {elapsedMs != null && (
-            <span className="ml-auto text-muted normal-case tracking-normal font-normal text-[11px]">
-              {(elapsedMs / 1000).toFixed(1)}s
-            </span>
-          )}
-        </div>
+        {streaming && (
+          <div className="px-4 py-2 bg-brand-soft border-b border-brand/20 flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold text-brand">
+            <Sparkles className="w-3 h-3 animate-pulse" />
+            Reading invoice…
+            {elapsedMs != null && (
+              <span className="ml-auto text-muted normal-case tracking-normal font-normal text-[11px]">
+                {(elapsedMs / 1000).toFixed(1)}s
+              </span>
+            )}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-[13px]">
           <Field label="Vendor" value={data.vendor_name ?? null} streaming={streaming} />
           <Field label="Vendor email" value={data.vendor_email ?? null} streaming={streaming} />
