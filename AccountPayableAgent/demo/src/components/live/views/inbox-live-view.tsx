@@ -43,31 +43,43 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
   const [openId, setOpenId] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  const fetchMessages = useCallback(async () => {
-    setState({ kind: "loading" });
+  const fetchMessages = useCallback(async (opts: { silent?: boolean } = {}) => {
+    // Background polls run silently — we only flip into "loading" on the first
+    // call so the screen doesn't flash empty every 3 seconds. Errors during a
+    // silent poll are also swallowed (a transient blip shouldn't tear down the
+    // whole inbox UI).
+    if (!opts.silent) setState({ kind: "loading" });
     try {
       const res = await fetch("/api/integrations/gmail/messages?days=30&max=25", { cache: "no-store" });
       if (!res.ok) {
+        if (opts.silent) return;
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setState({ kind: "error", message: data.error ?? `HTTP ${res.status}` });
         return;
       }
       const data = (await res.json()) as { messages: LiveMessage[] };
-      setState({ kind: "ready", messages: data.messages ?? [] });
-      if (data.messages?.length && !openId) setOpenId(data.messages[0].id);
+      const incoming = data.messages ?? [];
+      // Only mutate state if the list actually changed (different IDs in
+      // different positions). Same IDs in same order → keep the previous array
+      // reference so child rows don't re-render.
+      setState((prev) => {
+        if (prev.kind === "ready" && sameMessageList(prev.messages, incoming)) {
+          return prev;
+        }
+        return { kind: "ready", messages: incoming };
+      });
+      if (incoming.length && !openId) setOpenId(incoming[0].id);
     } catch (e) {
+      if (opts.silent) return;
       setState({ kind: "error", message: (e as Error).message });
     }
   }, [openId]);
 
   useEffect(() => {
+    // First call surfaces loading skeleton; subsequent polls run silently in
+    // the background so the UI doesn't flash on every tick.
     fetchMessages();
-    // Poll every 3 seconds while the inbox is open. ~130 quota units per refresh
-    // (1 list + 25 detail fetches) → ~43 units/sec, comfortably under Gmail's
-    // 250/sec per-user cap. Real product wants Gmail Pub/Sub push instead, but
-    // this is plenty for the demo and gets a forwarded email on screen within
-    // ~3 seconds of arrival.
-    const interval = setInterval(fetchMessages, 3_000);
+    const interval = setInterval(() => fetchMessages({ silent: true }), 3_000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -91,7 +103,7 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
             <Upload className="w-3.5 h-3.5" /> Upload
           </button>
           <button
-            onClick={fetchMessages}
+            onClick={() => fetchMessages()}
             disabled={state.kind === "loading"}
             className="text-muted hover:text-foreground p-1.5 rounded"
             title="Refresh"
@@ -440,6 +452,18 @@ function ExtractedFields({
       </div>
     </div>
   );
+}
+
+// Cheap structural check used by the inbox poller — same IDs in the same
+// order means nothing visible changed and we can keep the previous state
+// reference, avoiding a re-render. Comparing by id is enough because Gmail
+// returns a stable id per message.
+function sameMessageList(a: LiveMessage[], b: LiveMessage[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id) return false;
+  }
+  return true;
 }
 
 function Field({
