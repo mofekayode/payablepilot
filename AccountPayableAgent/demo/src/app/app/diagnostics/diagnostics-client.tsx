@@ -85,7 +85,11 @@ export function DiagnosticsClient() {
     };
   }, []);
 
-  const allGreen = probes.gmail.ok && probes.qboVendors.ok && probes.qboAccounts.ok;
+  // Run is enabled as long as we're not still loading — the test itself will
+  // report which step fails. Don't gate on probe state since a 0-result list
+  // is a perfectly legitimate "ok" outcome that the user might still want to
+  // see fail explicitly inside the pipeline run.
+  const stillLoading = Object.values(probes).some((p) => p.loading);
 
   async function runEndToEnd() {
     if (running) return;
@@ -321,22 +325,20 @@ export function DiagnosticsClient() {
           <div className="px-5 pb-5">
             <button
               onClick={runEndToEnd}
-              disabled={running || !allGreen}
+              disabled={running || stillLoading}
               className={cn(
                 "inline-flex items-center gap-2 h-10 px-4 rounded-md text-[13.5px] font-medium",
-                running || !allGreen
+                running || stillLoading
                   ? "bg-neutral-100 text-neutral-400 cursor-not-allowed"
                   : "bg-neutral-900 text-white hover:opacity-90"
               )}
             >
               {running ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {running ? "Running…" : "Run end-to-end test"}
+              {running ? "Running…" : stillLoading ? "Probing connections…" : "Run end-to-end test"}
             </button>
-            {!allGreen && (
-              <span className="ml-3 text-[12px] text-neutral-500">
-                Requires Gmail (any state), QuickBooks vendors, and at least one expense account.
-              </span>
-            )}
+            <span className="ml-3 text-[12px] text-neutral-500">
+              Each step reports its own pass / fail. Failures show the exact API error.
+            </span>
           </div>
         </section>
 
