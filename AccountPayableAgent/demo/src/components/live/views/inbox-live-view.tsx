@@ -15,8 +15,9 @@ import {
 import Link from "next/link";
 import type { LiveView } from "../sidebar-live";
 import { cn } from "@/lib/utils";
-import { addCaptured, newCaptured, updateCaptured } from "@/lib/captured-store";
+import { addCaptured, newCaptured } from "@/lib/captured-store";
 import { UploadInvoiceModalLive } from "../upload-invoice-modal-live";
+import { useExtractStream, type ExtractedInvoice } from "@/lib/use-extract-stream";
 
 type LiveAttachment = { filename: string; mimeType: string; attachmentId: string; size: number };
 type LiveMessage = {
@@ -29,27 +30,6 @@ type LiveMessage = {
   hasAttachments: boolean;
   attachmentNames: string[];
   attachments: LiveAttachment[];
-};
-
-type ExtractedInvoice = {
-  vendor_name: string | null;
-  vendor_email: string | null;
-  invoice_number: string | null;
-  issue_date: string | null;
-  due_date: string | null;
-  po_number: string | null;
-  project_ref: string | null;
-  subtotal: number | null;
-  tax: number | null;
-  total: number | null;
-  currency: string | null;
-  line_items: Array<{
-    description: string;
-    quantity: number | null;
-    unit_price: number | null;
-    amount: number | null;
-    project_ref: string | null;
-  }>;
 };
 
 type State =
@@ -82,6 +62,11 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
 
   useEffect(() => {
     fetchMessages();
+    // Poll every 15 seconds while the inbox is open. Real product wants Gmail
+    // Pub/Sub push, but for the demo this is plenty — a forwarded email shows
+    // up automatically within ~15s without the user touching anything.
+    const interval = setInterval(fetchMessages, 15_000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -208,32 +193,29 @@ function MessageDetail({
   message: LiveMessage;
   onSavedExtraction: (captured: ReturnType<typeof newCaptured>) => void;
 }) {
-  const [extracting, setExtracting] = useState<string | null>(null);
+  const [activeAttachmentId, setActiveAttachmentId] = useState<string | null>(null);
   const [extractions, setExtractions] = useState<Record<string, ExtractedInvoice>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [savedAttachmentIds, setSavedAttachmentIds] = useState<Set<string>>(new Set());
+  const stream = useExtractStream();
 
   const fromName = message.from.replace(/<.*>$/, "").replace(/^"|"$/g, "").trim() || message.from;
   const fromEmail = message.from.match(/<([^>]+)>/)?.[1] ?? message.from;
 
   const extract = async (attachmentId: string) => {
-    setExtracting(attachmentId);
-    setErrors((p) => ({ ...p, [attachmentId]: "" }));
-    try {
-      const res = await fetch("/api/extract/invoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "gmail", messageId: message.id, attachmentId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setExtractions((p) => ({ ...p, [attachmentId]: data.extracted }));
-    } catch (e) {
-      setErrors((p) => ({ ...p, [attachmentId]: (e as Error).message }));
-    } finally {
-      setExtracting(null);
-    }
+    if (stream.streaming) return;
+    setActiveAttachmentId(attachmentId);
+    stream.reset();
+    await stream.run({ source: "gmail", messageId: message.id, attachmentId });
   };
+
+  // Cache the final extraction once it completes so we can render the same
+  // card for subsequent visits without re-running.
+  useEffect(() => {
+    if (!activeAttachmentId) return;
+    if (stream.extracted) {
+      setExtractions((p) => ({ ...p, [activeAttachmentId]: stream.extracted! }));
+    }
+  }, [stream.extracted, activeAttachmentId]);
 
   const saveToBills = (attachmentId: string) => {
     const ex = extractions[attachmentId];
@@ -262,7 +244,7 @@ function MessageDetail({
       tax: ex.tax,
       total: ex.total,
       currency: ex.currency,
-      lines: ex.line_items.map((li) => ({
+      lines: (ex.line_items ?? []).map((li) => ({
         description: li.description,
         quantity: li.quantity,
         unitPrice: li.unit_price,
@@ -311,9 +293,12 @@ function MessageDetail({
             <ul>
               {message.attachments.map((a) => {
                 const isPdf = /pdf/i.test(a.mimeType) || /\.pdf$/i.test(a.filename);
-                const ex = extractions[a.attachmentId];
-                const err = errors[a.attachmentId];
+                const cached = extractions[a.attachmentId];
+                const isStreamingHere = stream.streaming && activeAttachmentId === a.attachmentId;
+                const partialHere = activeAttachmentId === a.attachmentId ? stream.partial : null;
+                const errorHere = activeAttachmentId === a.attachmentId ? stream.error : null;
                 const saved = savedAttachmentIds.has(a.attachmentId);
+                const display = cached ?? (partialHere as ExtractedInvoice | null);
                 return (
                   <li key={a.attachmentId} className="border-b border-border last:border-0">
                     <div className="flex items-center gap-3 px-4 py-3">
@@ -326,16 +311,16 @@ function MessageDetail({
                           {a.mimeType} · {(a.size / 1024).toFixed(1)} KB
                         </div>
                       </div>
-                      {isPdf && !ex && (
+                      {isPdf && !cached && (
                         <button
                           onClick={() => extract(a.attachmentId)}
-                          disabled={extracting !== null}
+                          disabled={stream.streaming}
                           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 disabled:opacity-50"
                         >
-                          {extracting === a.attachmentId ? (
+                          {isStreamingHere ? (
                             <>
                               <span className="w-3 h-3 rounded-full border-2 border-background border-t-transparent animate-spin" />
-                              Extracting…
+                              Reading…
                             </>
                           ) : (
                             <>
@@ -344,7 +329,7 @@ function MessageDetail({
                           )}
                         </button>
                       )}
-                      {ex && !saved && (
+                      {cached && !saved && (
                         <button
                           onClick={() => saveToBills(a.attachmentId)}
                           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-emerald-600 text-white text-[12.5px] font-medium hover:bg-emerald-700"
@@ -358,12 +343,18 @@ function MessageDetail({
                         </span>
                       )}
                     </div>
-                    {err && (
+                    {errorHere && (
                       <div className="px-4 pb-3 text-[12px] text-rose-700 flex items-start gap-1.5">
-                        <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" /> {err}
+                        <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" /> {errorHere}
                       </div>
                     )}
-                    {ex && <ExtractedFields data={ex} />}
+                    {display && (
+                      <ExtractedFields
+                        data={display}
+                        streaming={isStreamingHere}
+                        elapsedMs={isStreamingHere ? stream.elapsedMs : null}
+                      />
+                    )}
                   </li>
                 );
               })}
@@ -375,38 +366,57 @@ function MessageDetail({
   );
 }
 
-function ExtractedFields({ data }: { data: ExtractedInvoice }) {
-  const fmt = (n: number | null) =>
-    n == null ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: data.currency || "USD" }).format(n);
+function ExtractedFields({
+  data,
+  streaming,
+  elapsedMs,
+}: {
+  data: Partial<ExtractedInvoice>;
+  streaming?: boolean;
+  elapsedMs?: number | null;
+}) {
+  const fmt = (n: number | null | undefined) =>
+    n == null ? null : new Intl.NumberFormat("en-US", { style: "currency", currency: data.currency || "USD" }).format(n);
+  const lineItems = data.line_items ?? [];
   return (
     <div className="px-4 pb-4 pt-1 bg-surface/50">
       <div className="rounded-lg border border-brand/30 bg-background overflow-hidden">
         <div className="px-4 py-2 bg-brand-soft border-b border-brand/20 flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-semibold text-brand">
-          <Sparkles className="w-3 h-3" /> Extracted by Claude
+          <Sparkles className={cn("w-3 h-3", streaming && "animate-pulse")} />
+          {streaming ? "Extracting with Claude…" : "Extracted by Claude"}
+          {elapsedMs != null && (
+            <span className="ml-auto text-muted normal-case tracking-normal font-normal text-[11px]">
+              {(elapsedMs / 1000).toFixed(1)}s
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-4 text-[13px]">
-          <Field label="Vendor" value={data.vendor_name} />
-          <Field label="Vendor email" value={data.vendor_email} />
-          <Field label="Invoice #" value={data.invoice_number} />
-          <Field label="PO #" value={data.po_number} />
-          <Field label="Issued" value={data.issue_date} />
-          <Field label="Due" value={data.due_date} />
-          <Field label="Project / Job" value={data.project_ref} highlight />
-          <Field label="Currency" value={data.currency} />
-          <Field label="Subtotal" value={fmt(data.subtotal)} />
-          <Field label="Tax" value={fmt(data.tax)} />
-          <Field label="Total" value={<span className="font-semibold">{fmt(data.total)}</span>} />
+          <Field label="Vendor" value={data.vendor_name ?? null} streaming={streaming} />
+          <Field label="Vendor email" value={data.vendor_email ?? null} streaming={streaming} />
+          <Field label="Invoice #" value={data.invoice_number ?? null} streaming={streaming} />
+          <Field label="PO #" value={data.po_number ?? null} streaming={streaming} />
+          <Field label="Issued" value={data.issue_date ?? null} streaming={streaming} />
+          <Field label="Due" value={data.due_date ?? null} streaming={streaming} />
+          <Field label="Project / Job" value={data.project_ref ?? null} highlight streaming={streaming} />
+          <Field label="Currency" value={data.currency ?? null} streaming={streaming} />
+          <Field label="Subtotal" value={fmt(data.subtotal)} streaming={streaming} />
+          <Field label="Tax" value={fmt(data.tax)} streaming={streaming} />
+          <Field
+            label="Total"
+            value={fmt(data.total) ? <span className="font-semibold">{fmt(data.total)}</span> : null}
+            streaming={streaming}
+          />
         </div>
-        {data.line_items?.length > 0 && (
+        {lineItems.length > 0 && (
           <div className="border-t border-border">
             <div className="px-4 py-2 text-[11px] uppercase tracking-wider text-muted font-medium">
-              Line items ({data.line_items.length})
+              Line items ({lineItems.length}){streaming && "…"}
             </div>
             <ul>
-              {data.line_items.slice(0, 8).map((li, i) => (
-                <li key={i} className="flex items-start gap-3 px-4 py-2 border-t border-border text-[12.5px]">
+              {lineItems.slice(0, 8).map((li, i) => (
+                <li key={i} className="flex items-start gap-3 px-4 py-2 border-t border-border text-[12.5px] animate-fade-in-up">
                   <div className="flex-1 min-w-0">
-                    <div className="truncate">{li.description}</div>
+                    <div className="truncate">{li.description ?? "…"}</div>
                     {li.project_ref && (
                       <div className="text-[11px] text-brand font-medium">Project: {li.project_ref}</div>
                     )}
@@ -414,11 +424,11 @@ function ExtractedFields({ data }: { data: ExtractedInvoice }) {
                   <div className="text-muted text-right shrink-0 tabular-nums">
                     {li.quantity != null && `${li.quantity} ×`} {li.unit_price != null && fmt(li.unit_price)}
                   </div>
-                  <div className="text-right shrink-0 tabular-nums w-20">{fmt(li.amount)}</div>
+                  <div className="text-right shrink-0 tabular-nums w-20">{fmt(li.amount) ?? "…"}</div>
                 </li>
               ))}
-              {data.line_items.length > 8 && (
-                <li className="px-4 py-2 text-[11.5px] text-muted">+{data.line_items.length - 8} more</li>
+              {lineItems.length > 8 && (
+                <li className="px-4 py-2 text-[11.5px] text-muted">+{lineItems.length - 8} more</li>
               )}
             </ul>
           </div>
@@ -432,17 +442,26 @@ function Field({
   label,
   value,
   highlight,
+  streaming,
 }: {
   label: string;
   value: React.ReactNode;
   highlight?: boolean;
+  streaming?: boolean;
 }) {
+  const empty = value == null || value === "" || value === false;
   return (
     <div className="flex items-baseline gap-2">
       <span className="text-[11px] uppercase tracking-wider text-muted font-medium shrink-0 w-[88px]">{label}</span>
-      <span className={cn("truncate", highlight && value && "text-brand font-semibold")}>
-        {value || <span className="text-muted">—</span>}
-      </span>
+      {empty ? (
+        streaming ? (
+          <span className="inline-block h-3 w-24 rounded bg-neutral-200 animate-pulse" />
+        ) : (
+          <span className="text-muted">—</span>
+        )
+      ) : (
+        <span className={cn("truncate", highlight && "text-brand font-semibold")}>{value}</span>
+      )}
     </div>
   );
 }

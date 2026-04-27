@@ -29,14 +29,19 @@ export function UploadInvoiceModalLive({
         const buf = await file.arrayBuffer();
         const base64 = bytesToBase64(new Uint8Array(buf));
         setPhase("extracting");
-        const res = await fetch("/api/extract/invoice", {
+        // Streaming endpoint — final 'done' event carries the parsed JSON. We
+        // still want the modal to show "Extracting…" through the run since the
+        // bills queue is the right place for the field-by-field reveal.
+        const res = await fetch("/api/extract/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ source: "upload", base64 }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        const ex = data.extracted as {
+        if (!res.ok || !res.body) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
+        }
+        type Extracted = {
           vendor_name: string | null;
           vendor_email: string | null;
           invoice_number: string | null;
@@ -56,24 +61,66 @@ export function UploadInvoiceModalLive({
             project_ref: string | null;
           }>;
         };
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let extracted: Extracted | null = null;
+        let streamError: string | null = null;
+
+        outer: while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let idx;
+          while ((idx = buffer.indexOf("\n\n")) >= 0) {
+            const block = buffer.slice(0, idx);
+            buffer = buffer.slice(idx + 2);
+            let event = "message";
+            let dataRaw = "";
+            for (const line of block.split("\n")) {
+              if (line.startsWith("event:")) event = line.slice(6).trim();
+              else if (line.startsWith("data:")) dataRaw += line.slice(5).trim();
+            }
+            if (!dataRaw) continue;
+            let data: { extracted?: Extracted; error?: string } = {};
+            try {
+              data = JSON.parse(dataRaw);
+            } catch {
+              continue;
+            }
+            if (event === "done" && data.extracted) {
+              extracted = data.extracted;
+              break outer;
+            }
+            if (event === "error") {
+              streamError = data.error ?? "stream error";
+              break outer;
+            }
+          }
+        }
+
+        if (streamError) throw new Error(streamError);
+        if (!extracted) throw new Error("Stream ended without a parsed extraction.");
+
         const meta = newCaptured();
         addCaptured({
           id: meta.id,
           createdAt: meta.createdAt,
           status: "extracted",
           source: { kind: "upload", fileName: file.name, sizeKb: Math.round(file.size / 1024) },
-          vendorName: ex.vendor_name,
-          vendorEmail: ex.vendor_email,
-          invoiceNumber: ex.invoice_number,
-          issueDate: ex.issue_date,
-          dueDate: ex.due_date,
-          poNumber: ex.po_number,
-          projectRefRaw: ex.project_ref,
-          subtotal: ex.subtotal,
-          tax: ex.tax,
-          total: ex.total,
-          currency: ex.currency,
-          lines: ex.line_items.map((li) => ({
+          vendorName: extracted.vendor_name,
+          vendorEmail: extracted.vendor_email,
+          invoiceNumber: extracted.invoice_number,
+          issueDate: extracted.issue_date,
+          dueDate: extracted.due_date,
+          poNumber: extracted.po_number,
+          projectRefRaw: extracted.project_ref,
+          subtotal: extracted.subtotal,
+          tax: extracted.tax,
+          total: extracted.total,
+          currency: extracted.currency,
+          lines: (extracted.line_items ?? []).map((li) => ({
             description: li.description,
             quantity: li.quantity,
             unitPrice: li.unit_price,
