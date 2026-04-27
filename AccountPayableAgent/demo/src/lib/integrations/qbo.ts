@@ -111,6 +111,9 @@ async function authedFetch(path: string, init: RequestInit = {}): Promise<Respon
 
 export type QboVendor = { Id: string; DisplayName: string; PrimaryEmailAddr?: { Address?: string } };
 export type QboBill = { Id: string; DocNumber?: string; TxnDate?: string; TotalAmt?: number; VendorRef?: { value: string; name?: string } };
+// QBO models "Projects" as Customers with IsProject=true. They share the Customer endpoint.
+export type QboProject = { Id: string; DisplayName: string; ParentRef?: { value: string; name?: string }; Active?: boolean };
+export type QboAccount = { Id: string; Name: string; AccountType?: string; AccountSubType?: string };
 
 export async function listVendors(limit = 25): Promise<QboVendor[]> {
   const res = await authedFetch(`/query?query=${encodeURIComponent(`select * from Vendor maxresults ${limit}`)}`);
@@ -126,10 +129,33 @@ export async function listBills(limit = 25): Promise<QboBill[]> {
   return data.QueryResponse?.Bill ?? [];
 }
 
+export async function listProjects(limit = 50): Promise<QboProject[]> {
+  // Projects are Customers with IsProject=true. Some sandbox companies have IsProject feature off,
+  // in which case this returns []. The UI handles empty gracefully.
+  const res = await authedFetch(
+    `/query?query=${encodeURIComponent(`select Id, DisplayName, ParentRef, Active from Customer where IsProject = true and Active = true maxresults ${limit}`)}`
+  );
+  if (!res.ok) throw new Error(`QBO listProjects failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { QueryResponse?: { Customer?: QboProject[] } };
+  return data.QueryResponse?.Customer ?? [];
+}
+
+export async function listAccounts(limit = 100): Promise<QboAccount[]> {
+  // Useful for picking a default expense account when posting bills.
+  const res = await authedFetch(
+    `/query?query=${encodeURIComponent(`select Id, Name, AccountType, AccountSubType from Account where Active = true and AccountType = 'Expense' maxresults ${limit}`)}`
+  );
+  if (!res.ok) throw new Error(`QBO listAccounts failed: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { QueryResponse?: { Account?: QboAccount[] } };
+  return data.QueryResponse?.Account ?? [];
+}
+
 export type CreateBillInput = {
   vendorId: string;
   txnDate: string; // YYYY-MM-DD
   docNumber?: string;
+  // Optional: tag every line item to a QBO Project (Customer with IsProject=true).
+  projectId?: string;
   lines: Array<{ description: string; amount: number; accountId: string }>;
 };
 
@@ -142,7 +168,11 @@ export async function createBill(input: CreateBillInput): Promise<QboBill> {
       DetailType: "AccountBasedExpenseLineDetail",
       Amount: l.amount,
       Description: l.description,
-      AccountBasedExpenseLineDetail: { AccountRef: { value: l.accountId } },
+      AccountBasedExpenseLineDetail: {
+        AccountRef: { value: l.accountId },
+        // QBO ties project costing to the CustomerRef on each line; the Project Id is the Customer Id.
+        ...(input.projectId ? { CustomerRef: { value: input.projectId } } : {}),
+      },
     })),
   };
   const res = await authedFetch(`/bill?minorversion=70`, { method: "POST", body: JSON.stringify(body) });

@@ -49,6 +49,9 @@ export type Invoice = {
   receivingDate?: string;
   discrepancyReason?: string;
   originalPaidInvoice?: string;
+  // QBO Project (Customer with IsProject=true) the bill should be costed against.
+  projectId?: string;
+  projectName?: string;
 };
 
 const sum = (l: LineItem[]) => l.reduce((s, x) => s + x.qty * x.unitPrice, 0);

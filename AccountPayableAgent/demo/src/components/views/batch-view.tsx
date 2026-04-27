@@ -5,9 +5,10 @@ import { useStore } from "@/lib/store";
 import { Badge, Button, Card, CardBody, CardHeader, Row } from "../primitives";
 import { money } from "@/lib/utils";
 import { vendors } from "@/lib/app-data";
+import { ProjectPicker } from "../project-picker";
 
 export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => void }) {
-  const { invoices, approveBatch } = useStore();
+  const { invoices, approveBatch, setProject } = useStore();
   const matched = invoices.filter((i) => i.status === "matched");
   const paid = invoices.filter((i) => i.status === "paid");
   const batchTotal = matched.reduce((s, i) => s + i.total, 0);
@@ -61,10 +62,10 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
           ) : (
             <ul>
               {matched.map((inv) => (
-                <li key={inv.id}>
+                <li key={inv.id} className="flex items-center gap-3 px-5 py-3 border-b border-border hover:bg-surface">
                   <button
                     onClick={() => onOpenInvoice(inv.id)}
-                    className="w-full flex items-center gap-4 px-5 py-3 border-b border-border hover:bg-surface text-left"
+                    className="flex items-center gap-4 min-w-0 flex-1 text-left"
                   >
                     <div className="w-9 h-9 rounded bg-surface grid place-items-center shrink-0">
                       <FileText className="w-4 h-4" />
@@ -77,11 +78,17 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
                         {inv.suggestedGL.code} · {inv.suggestedGL.label} · Due {inv.dueDate}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-semibold">{money(inv.total)}</div>
-                    </div>
-                    <Badge tone="brand">Matched</Badge>
                   </button>
+                  <ProjectPicker
+                    value={inv.projectId}
+                    valueLabel={inv.projectName}
+                    onChange={(id, name) => setProject(inv.id, id, name)}
+                    compact
+                  />
+                  <div className="text-right shrink-0">
+                    <div className="text-sm font-semibold">{money(inv.total)}</div>
+                  </div>
+                  <Badge tone="brand">Matched</Badge>
                 </li>
               ))}
               <li>
@@ -112,7 +119,10 @@ export function BatchView({ onOpenInvoice }: { onOpenInvoice: (id: string) => vo
                     <div className="text-sm font-medium truncate">
                       {vendors[inv.vendorKey].name} · {inv.invoiceNumber}
                     </div>
-                    <div className="text-xs text-muted truncate">Posted to {inv.suggestedGL.code} · {inv.suggestedGL.label}</div>
+                    <div className="text-xs text-muted truncate">
+                      Posted to {inv.suggestedGL.code} · {inv.suggestedGL.label}
+                      {inv.projectName ? ` · Project: ${inv.projectName}` : ""}
+                    </div>
                   </div>
                   <div className="text-sm font-semibold">{money(inv.total)}</div>
                   <Badge tone="brand">Sent to QBO</Badge>

@@ -8,6 +8,7 @@ import {
   AutomationKey,
   AutomationSettings,
   DEFAULT_AUTOMATION,
+  WorkflowStyle,
   loadAutomation,
   saveAutomation,
 } from "@/lib/automation-settings";
@@ -131,6 +132,11 @@ export function SettingsClient({
               </button>
             </div>
           </div>
+
+          <WorkflowStyleCard
+            value={automation.workflowStyle}
+            onChange={(v) => updateAutomation("workflowStyle", v)}
+          />
 
           <AutomationGroup
             title="When new invoices arrive"
@@ -431,6 +437,80 @@ function ToggleRow({
         {help && <div className="mt-0.5 text-[12px] text-neutral-500">{help}</div>}
       </div>
       <Toggle value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+function WorkflowStyleCard({
+  value,
+  onChange,
+}: {
+  value: WorkflowStyle;
+  onChange: (v: WorkflowStyle) => void;
+}) {
+  const options: Array<{ key: WorkflowStyle; title: string; tag?: string; body: string }> = [
+    {
+      key: "strict",
+      title: "Strict",
+      tag: "POs required",
+      body: "Every invoice must match an approved PO and signed receiving doc before it can post. Best for property managers, larger ops with formal procurement.",
+    },
+    {
+      key: "standard",
+      title: "Standard",
+      tag: "POs optional",
+      body: "Match against a PO when one exists, otherwise post the bill directly. Good fit for most SMBs and trades shops that use POs only on big jobs.",
+    },
+    {
+      key: "bills_only",
+      title: "Bills only",
+      tag: "No matching",
+      body: "Skip the matching step entirely. Captured invoices flow straight to 'ready to post' for your approval. Best for service businesses (HVAC, contractors, cleaners) without formal POs.",
+    },
+  ];
+
+  return (
+    <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-neutral-100 flex items-center gap-2 text-[12.5px] uppercase tracking-wider text-neutral-500 font-medium">
+        <Inbox className="w-4 h-4 text-neutral-400" />
+        Workflow style
+      </div>
+      <div className="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+        {options.map((o) => {
+          const selected = o.key === value;
+          return (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => onChange(o.key)}
+              className={
+                "text-left p-4 rounded-lg border transition-colors " +
+                (selected
+                  ? "border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900"
+                  : "border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50")
+              }
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[14px] font-semibold tracking-tight">{o.title}</span>
+                {o.tag && (
+                  <span
+                    className={
+                      "text-[10.5px] uppercase tracking-wider px-1.5 py-0.5 rounded border " +
+                      (selected
+                        ? "bg-neutral-900 text-white border-neutral-900"
+                        : "bg-neutral-50 text-neutral-600 border-neutral-200")
+                    }
+                  >
+                    {o.tag}
+                  </span>
+                )}
+                {selected && <Check className="w-4 h-4 text-neutral-900 ml-auto" />}
+              </div>
+              <div className="mt-2 text-[12.5px] text-neutral-600 leading-relaxed">{o.body}</div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

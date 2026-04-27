@@ -24,6 +24,7 @@ type Action =
   | { type: "CAPTURE"; emailId: string }
   | { type: "UPLOAD_INVOICE"; fileName: string; sizeKb: number }
   | { type: "SET_STATUS"; invoiceId: string; status: InvoiceStatus }
+  | { type: "SET_PROJECT"; invoiceId: string; projectId: string | null; projectName: string | null }
   | { type: "APPROVE_BATCH" }
   | { type: "TOAST"; message: string | null }
   | { type: "ARRIVING"; emailId: string | null }
@@ -90,6 +91,19 @@ function reducer(state: State, action: Action): State {
         ...state,
         invoices: state.invoices.map((inv) => (inv.id === action.invoiceId ? { ...inv, status: action.status } : inv)),
       };
+    case "SET_PROJECT":
+      return {
+        ...state,
+        invoices: state.invoices.map((inv) =>
+          inv.id === action.invoiceId
+            ? {
+                ...inv,
+                projectId: action.projectId ?? undefined,
+                projectName: action.projectName ?? undefined,
+              }
+            : inv
+        ),
+      };
     case "APPROVE_BATCH":
       return {
         ...state,
@@ -122,6 +136,7 @@ type StoreValue = State & {
   capture: (emailId: string) => void;
   uploadInvoice: (fileName: string, sizeKb: number) => void;
   setStatus: (invoiceId: string, status: InvoiceStatus) => void;
+  setProject: (invoiceId: string, projectId: string | null, projectName: string | null) => void;
   approveBatch: () => void;
   dismissToast: () => void;
   setToast: (message: string | null, autoHideMs?: number) => void;
@@ -147,6 +162,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     (invoiceId: string, status: InvoiceStatus) => dispatch({ type: "SET_STATUS", invoiceId, status }),
     []
   );
+  const setProject = useCallback(
+    (invoiceId: string, projectId: string | null, projectName: string | null) =>
+      dispatch({ type: "SET_PROJECT", invoiceId, projectId, projectName }),
+    []
+  );
   const approveBatch = useCallback(() => {
     dispatch({ type: "APPROVE_BATCH" });
     setTimeout(() => dispatch({ type: "TOAST", message: null }), 2400);
@@ -167,8 +187,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ ...state, readEmail, capture, uploadInvoice, setStatus, approveBatch, dismissToast, setToast, setArriving, resetDemo }),
-    [state, readEmail, capture, uploadInvoice, setStatus, approveBatch, dismissToast, setToast, setArriving, resetDemo]
+    () => ({ ...state, readEmail, capture, uploadInvoice, setStatus, setProject, approveBatch, dismissToast, setToast, setArriving, resetDemo }),
+    [state, readEmail, capture, uploadInvoice, setStatus, setProject, approveBatch, dismissToast, setToast, setArriving, resetDemo]
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

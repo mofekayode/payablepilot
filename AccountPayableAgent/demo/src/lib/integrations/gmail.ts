@@ -77,6 +77,7 @@ export type GmailMessageSummary = {
   snippet: string;
   hasAttachments: boolean;
   attachmentNames: string[];
+  attachments: Array<{ filename: string; mimeType: string; attachmentId: string; size: number }>;
 };
 
 // List recent messages in the AP inbox that look like invoices (have attachments).
@@ -105,7 +106,8 @@ export async function listInvoiceMessages(opts: { maxResults?: number; days?: nu
       });
       const headers = (detail.data.payload?.headers ?? []) as Array<{ name?: string | null; value?: string | null }>;
       const get = (name: string) => headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
-      const attachmentNames = collectAttachmentNames(detail.data.payload);
+      const attachments = listAttachmentParts(detail.data.payload);
+      const attachmentNames = attachments.map((a) => a.filename);
       return {
         id: detail.data.id ?? "",
         threadId: detail.data.threadId ?? "",
@@ -113,8 +115,9 @@ export async function listInvoiceMessages(opts: { maxResults?: number; days?: nu
         subject: get("Subject"),
         receivedAt: get("Date"),
         snippet: detail.data.snippet ?? "",
-        hasAttachments: attachmentNames.length > 0,
+        hasAttachments: attachments.length > 0,
         attachmentNames,
+        attachments,
       };
     })
   );
@@ -133,4 +136,50 @@ function collectAttachmentNames(payload: gmail_v1.Schema$MessagePart | undefined
   };
   visit(payload);
   return out;
+}
+
+export type GmailAttachment = {
+  filename: string;
+  mimeType: string;
+  attachmentId: string;
+  size: number;
+};
+
+// Walks the payload tree and returns metadata for every part with a non-empty filename.
+export function listAttachmentParts(payload: gmail_v1.Schema$MessagePart | undefined): GmailAttachment[] {
+  if (!payload) return [];
+  const out: GmailAttachment[] = [];
+  const visit = (part: gmail_v1.Schema$MessagePart) => {
+    if (part.filename && part.body?.attachmentId) {
+      out.push({
+        filename: part.filename,
+        mimeType: part.mimeType ?? "application/octet-stream",
+        attachmentId: part.body.attachmentId,
+        size: part.body.size ?? 0,
+      });
+    }
+    (part.parts ?? []).forEach(visit);
+  };
+  visit(payload);
+  return out;
+}
+
+// Returns { attachments, mimeType } for a message. Includes the actual attachment IDs needed to download.
+export async function getMessageAttachments(messageId: string): Promise<GmailAttachment[]> {
+  const gmail = await getGmailClient();
+  if (!gmail) throw new Error("Gmail is not connected.");
+  const detail = await gmail.users.messages.get({ userId: "me", id: messageId, format: "full" });
+  return listAttachmentParts(detail.data.payload);
+}
+
+// Downloads a single Gmail attachment as base64 (Gmail returns URL-safe base64 — convert to standard).
+export async function downloadAttachment(messageId: string, attachmentId: string): Promise<{ base64: string; bytes: number }> {
+  const gmail = await getGmailClient();
+  if (!gmail) throw new Error("Gmail is not connected.");
+  const res = await gmail.users.messages.attachments.get({ userId: "me", messageId, id: attachmentId });
+  const urlSafe = res.data.data ?? "";
+  // Gmail uses url-safe base64; convert to standard base64 so Anthropic + atob handle it.
+  const base64 = urlSafe.replace(/-/g, "+").replace(/_/g, "/");
+  const bytes = res.data.size ?? 0;
+  return { base64, bytes };
 }
