@@ -124,6 +124,7 @@ export function DiagnosticsClient() {
       { id: "accounts", label: "List QuickBooks expense accounts", status: "pending" },
       { id: "projects", label: "List QuickBooks projects", status: "pending" },
       { id: "post", label: "Post bill to QuickBooks", status: "pending" },
+      { id: "dupe", label: "Verify duplicate detection picks up the just-posted bill", status: "pending" },
     ];
     setSteps(initial);
 
@@ -231,6 +232,8 @@ export function DiagnosticsClient() {
     const vendor = vendors[0];
     const account = accounts[0];
     const project = projects?.[0] ?? null;
+    let postedDocNumber: string | null = null;
+    let postedVendorId: string | null = null;
     await time("post", async () => {
       const lines = (extracted.line_items?.length
         ? extracted.line_items.map((li) => ({
@@ -246,6 +249,8 @@ export function DiagnosticsClient() {
       const txnDate = extracted.issue_date ?? new Date().toISOString().slice(0, 10);
       // Avoid DocNumber collisions across reruns of the test.
       const docNumber = `${extracted.invoice_number ?? "TEST"}-DIAG-${Date.now().toString().slice(-5)}`;
+      postedDocNumber = docNumber;
+      postedVendorId = vendor.Id;
 
       const res = await fetch("/api/integrations/qbo/bills", {
         method: "POST",
@@ -267,6 +272,32 @@ export function DiagnosticsClient() {
         result: data.bill,
       });
     });
+
+    // 7. Verify duplicate detection — the just-posted (vendor, docNumber) pair
+    // should now be findable via the bills/check endpoint. Proves that if the
+    // user re-extracts the same invoice, the bills queue will block re-posting.
+    if (postedDocNumber && postedVendorId) {
+      await time("dupe", async () => {
+        const url = new URL("/api/integrations/qbo/bills/check", window.location.origin);
+        url.searchParams.set("vendorId", postedVendorId!);
+        url.searchParams.set("docNumber", postedDocNumber!);
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        if (!data.existing?.Id) {
+          throw new Error("Check endpoint reported no match — duplicate detection would not fire on re-submit.");
+        }
+        update("dupe", {
+          detail: `Match confirmed (Bill #${data.existing.Id}). Re-extracting this invoice would block in the bills queue.`,
+          result: data.existing,
+        });
+      });
+    } else {
+      update("dupe", {
+        status: "fail",
+        error: "Skipped — bill post didn't complete, so we can't verify duplicate detection.",
+      });
+    }
 
     setRunning(false);
   }
