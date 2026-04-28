@@ -48,12 +48,14 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
     return () => window.removeEventListener("pp:captured:changed", refresh);
   }, [refreshKey]);
 
-  // Pull QBO reference data once.
+  // Pull QBO reference data once. cache: 'no-store' so a stale 25-vendor
+  // response from before we bumped the listVendors limit doesn't keep coming
+  // back from the browser cache and starve the auto-matcher.
   useEffect(() => {
     Promise.all([
-      fetch("/api/integrations/qbo/vendors").then((r) => (r.ok ? r.json() : { vendors: [] })),
-      fetch("/api/integrations/qbo/projects").then((r) => (r.ok ? r.json() : { projects: [] })),
-      fetch("/api/integrations/qbo/accounts").then((r) => (r.ok ? r.json() : { accounts: [] })),
+      fetch("/api/integrations/qbo/vendors", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { vendors: [] })),
+      fetch("/api/integrations/qbo/projects", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { projects: [] })),
+      fetch("/api/integrations/qbo/accounts", { cache: "no-store" }).then((r) => (r.ok ? r.json() : { accounts: [] })),
     ]).then(([v, p, a]) => {
       setVendors(v.vendors ?? []);
       setProjects(p.projects ?? []);
