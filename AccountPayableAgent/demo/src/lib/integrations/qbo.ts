@@ -194,6 +194,39 @@ export async function findVendorByName(displayName: string): Promise<QboVendor |
   return data.QueryResponse?.Vendor?.[0] ?? null;
 }
 
+// Pulls a few active customers (NOT projects). Used by the demo-setup helper
+// because creating a project requires a parent Customer in QBO.
+export async function listCustomers(limit = 10): Promise<QboProject[]> {
+  const res = await authedFetch(
+    `/query?query=${encodeURIComponent(`select Id, DisplayName, Active from Customer where Active = true maxresults ${limit}`)}`
+  );
+  if (!res.ok) return [];
+  const data = (await res.json()) as { QueryResponse?: { Customer?: QboProject[] } };
+  return data.QueryResponse?.Customer ?? [];
+}
+
+// Creates a project (Customer with IsProject=true under a parent Customer).
+// Returns null if QBO's Projects feature isn't enabled — caller can detect this
+// and surface the right setup instruction. Other errors throw.
+export async function createProject(displayName: string, parentCustomerId: string): Promise<QboProject | null> {
+  const body = {
+    DisplayName: displayName,
+    IsProject: true,
+    ParentRef: { value: parentCustomerId },
+  };
+  const res = await authedFetch(`/customer?minorversion=70`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    if (/IsProject not found|Projects.*not enabled/i.test(text)) return null;
+    throw new Error(`QBO createProject failed: ${res.status} ${text}`);
+  }
+  const data = (await res.json()) as { Customer: QboProject };
+  return data.Customer;
+}
+
 // Look for an existing Bill on the same vendor with the same DocNumber. Used for
 // duplicate detection — we don't want to post the same invoice twice. Returns
 // the first match (Intuit returns the most recent first by default) or null.

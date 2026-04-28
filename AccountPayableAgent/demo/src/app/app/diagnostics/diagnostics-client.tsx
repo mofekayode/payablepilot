@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   ExternalLink,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { PilotMark } from "@/components/pilot-mark";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,16 @@ export function DiagnosticsClient() {
   const [running, setRunning] = useState(false);
   const [postedBillId, setPostedBillId] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
-  const [setupResult, setSetupResult] = useState<{ created: number; existing: number; error?: string } | null>(null);
+  const [setupResult, setSetupResult] = useState<
+    | {
+        ok: true;
+        vendor?: { displayName: string; created: boolean } | null;
+        project?: { displayName: string; created: boolean } | null;
+        notes?: string[];
+      }
+    | { ok: false; error: string }
+    | null
+  >(null);
 
   // On mount, probe each integration so we know up-front what's connected.
   useEffect(() => {
@@ -103,11 +113,13 @@ export function DiagnosticsClient() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setSetupResult({
-        created: (data.created ?? []).length,
-        existing: (data.existing ?? []).length,
+        ok: true,
+        vendor: data.vendor ?? null,
+        project: data.project ?? null,
+        notes: data.notes ?? [],
       });
     } catch (e) {
-      setSetupResult({ created: 0, existing: 0, error: (e as Error).message });
+      setSetupResult({ ok: false, error: (e as Error).message });
     } finally {
       setSetupBusy(false);
     }
@@ -378,20 +390,41 @@ export function DiagnosticsClient() {
               </a>
             </div>
           </div>
-          {setupResult && (
-            <div
-              className={
-                "px-5 py-2 text-[12px] border-b border-neutral-100 " +
-                (setupResult.error
-                  ? "bg-rose-50 text-rose-800"
-                  : "bg-emerald-50 text-emerald-800")
-              }
-            >
-              {setupResult.error
-                ? `Setup failed: ${setupResult.error}`
-                : setupResult.created > 0
-                  ? `Created Cornerstone HVAC Services in QuickBooks. Re-run the test to see auto-fill match it.`
-                  : `Cornerstone HVAC Services already exists in QuickBooks — auto-fill will pick it up.`}
+          {setupResult && !setupResult.ok && (
+            <div className="px-5 py-2 text-[12px] border-b border-neutral-100 bg-rose-50 text-rose-800">
+              Setup failed: {setupResult.error}
+            </div>
+          )}
+          {setupResult && setupResult.ok && (
+            <div className="px-5 py-3 text-[12.5px] border-b border-neutral-100 bg-emerald-50 text-emerald-900 space-y-1">
+              {setupResult.vendor && (
+                <div className="flex items-start gap-2">
+                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <div>
+                    <strong>Vendor:</strong>{" "}
+                    {setupResult.vendor.created
+                      ? `Created ${setupResult.vendor.displayName} in QuickBooks.`
+                      : `${setupResult.vendor.displayName} already exists.`}
+                  </div>
+                </div>
+              )}
+              {setupResult.project && (
+                <div className="flex items-start gap-2">
+                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <div>
+                    <strong>Project:</strong>{" "}
+                    {setupResult.project.created
+                      ? `Created ${setupResult.project.displayName} in QuickBooks.`
+                      : `${setupResult.project.displayName} already exists.`}
+                  </div>
+                </div>
+              )}
+              {(setupResult.notes ?? []).map((n, i) => (
+                <div key={i} className="flex items-start gap-2 text-amber-900">
+                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <div>{n}</div>
+                </div>
+              ))}
             </div>
           )}
           <div className="p-5 grid sm:grid-cols-2 gap-4 text-[13px]">
