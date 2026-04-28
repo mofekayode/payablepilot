@@ -205,13 +205,20 @@ export async function listCustomers(limit = 10): Promise<QboProject[]> {
   return data.QueryResponse?.Customer ?? [];
 }
 
-// Creates a project (Customer with IsProject=true under a parent Customer).
-// Returns null if QBO's Projects feature isn't enabled — caller can detect this
-// and surface the right setup instruction. Other errors throw.
+// Creates a project (a sub-Customer attached to a parent). QBO's underlying
+// schema has two flags here: the legacy `Job` (universal) and the newer
+// `IsProject` (only present when the Projects feature is on). We set both —
+// Job + BillWithParent satisfy QBO's Customer-with-parent validator on every
+// company; IsProject upgrades it to a Projects-feature project where supported.
+//
+// Returns null if QBO's Projects feature isn't enabled AND the legacy Job
+// path also rejects — caller surfaces the right setup instruction.
 export async function createProject(displayName: string, parentCustomerId: string): Promise<QboProject | null> {
   const body = {
     DisplayName: displayName,
+    Job: true,
     IsProject: true,
+    BillWithParent: true,
     ParentRef: { value: parentCustomerId },
   };
   const res = await authedFetch(`/customer?minorversion=70`, {
