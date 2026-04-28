@@ -307,9 +307,19 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
 
         {posted.length > 0 && (
           <div className="bg-background rounded-xl border border-border overflow-hidden">
-            <div className="px-5 py-3 border-b border-border flex items-center gap-2 text-sm font-medium">
-              <Check className="w-4 h-4 text-emerald-600" />
-              Posted to QuickBooks ({posted.length})
+            <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-3 text-sm font-medium">
+              <span className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600" />
+                Posted to QuickBooks ({posted.length})
+              </span>
+              <a
+                href={qboBillsUrl()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[12px] text-muted hover:text-foreground"
+              >
+                Open in QuickBooks <ArrowRight className="w-3 h-3" />
+              </a>
             </div>
             <ul>
               {posted.map((it) => (
@@ -322,7 +332,20 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
                       {it.qboVendorName ?? it.vendorName ?? "Unknown vendor"} · {it.invoiceNumber ?? "—"}
                     </div>
                     <div className="text-[11.5px] text-muted truncate">
-                      Bill #{it.qboBillId} · {it.qboAccountName ?? "GL"}
+                      {it.qboBillId ? (
+                        <a
+                          href={qboBillUrl(it.qboBillId)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline hover:text-foreground"
+                        >
+                          Bill #{it.qboBillId}
+                        </a>
+                      ) : (
+                        "Bill #—"
+                      )}
+                      {" · "}
+                      {it.qboAccountName ?? "GL"}
                       {it.qboProjectName ? ` · ${it.qboProjectName}` : ""} · posted{" "}
                       {it.postedAt ? new Date(it.postedAt).toLocaleString() : ""}
                     </div>
@@ -367,7 +390,9 @@ function BillRow({
   onMarkReady: () => void;
   onRemove: () => void;
 }) {
-  const [expanded, setExpanded] = useState(item.status === "extracted");
+  // Bills queue rows ship collapsed so the user sees a clean list at a glance.
+  // Click the chevron / row to drill in.
+  const [expanded, setExpanded] = useState(false);
   const isPostable =
     !!item.qboVendorId &&
     !!item.qboAccountId &&
@@ -708,6 +733,14 @@ function RefPicker({
       )}
     </div>
   );
+}
+
+// Sandbox QBO URLs. When we move to production, swap to https://qbo.intuit.com.
+function qboBillsUrl(): string {
+  return "https://sandbox.qbo.intuit.com/app/bills";
+}
+function qboBillUrl(id: string): string {
+  return `https://sandbox.qbo.intuit.com/app/bill?txnId=${encodeURIComponent(id)}`;
 }
 
 function fuzzyVendorMatch(extracted: string, vendors: Vendor[]): Vendor | null {

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { SidebarLive, type LiveView } from "./sidebar-live";
 import { TopbarLive } from "./topbar-live";
 import { DashboardView } from "./views/dashboard-view";
@@ -15,9 +15,42 @@ type ConnectionState = {
   loading: boolean;
 };
 
+const ALLOWED_VIEWS: LiveView[] = ["dashboard", "inbox", "bills", "vendors", "projects"];
+
+function readViewFromUrl(): LiveView {
+  if (typeof window === "undefined") return "dashboard";
+  const v = new URLSearchParams(window.location.search).get("view");
+  if (v && (ALLOWED_VIEWS as string[]).includes(v)) return v as LiveView;
+  return "dashboard";
+}
+
 export function AppShellLive() {
-  const [view, setView] = useState<LiveView>("dashboard");
+  // Lazy init from the URL so a refresh on /app?view=bills lands on the same
+  // tab. Default tab (dashboard) is left implicit so the URL stays clean at /app.
+  const [view, setView] = useState<LiveView>(readViewFromUrl);
   const [conn, setConn] = useState<ConnectionState>({ gmail: false, qbo: false, qboCompany: null, loading: true });
+
+  // navigate(): single setter that mirrors view state into the URL via
+  // history.replaceState so the back/forward buttons aren't littered with
+  // sidebar clicks.
+  const navigate = useCallback((next: LiveView) => {
+    setView(next);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (next === "dashboard") url.searchParams.delete("view");
+    else url.searchParams.set("view", next);
+    window.history.replaceState({}, "", url.toString());
+  }, []);
+
+  // Respect browser back/forward by syncing state when popstate fires.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function onPop() {
+      setView(readViewFromUrl());
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     // Probe both integrations once on mount so the rest of the app knows whether
@@ -43,11 +76,11 @@ export function AppShellLive() {
     <div className="h-screen w-screen flex flex-col bg-background text-foreground">
       <TopbarLive gmailConnected={conn.gmail} qboConnected={conn.qbo} />
       <div className="flex-1 min-h-0 flex">
-        <SidebarLive active={view} onSelect={setView} />
+        <SidebarLive active={view} onSelect={navigate} />
         <main className="flex-1 min-w-0 overflow-hidden bg-surface">
-          {view === "dashboard" && <DashboardView onNavigate={setView} conn={conn} />}
-          {view === "inbox" && <InboxLiveView onNavigate={setView} />}
-          {view === "bills" && <BillsView onNavigate={setView} />}
+          {view === "dashboard" && <DashboardView onNavigate={navigate} conn={conn} />}
+          {view === "inbox" && <InboxLiveView onNavigate={navigate} />}
+          {view === "bills" && <BillsView onNavigate={navigate} />}
           {view === "vendors" && <VendorsView />}
           {view === "projects" && <ProjectsView />}
         </main>
