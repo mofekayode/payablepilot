@@ -20,6 +20,13 @@ import { UploadInvoiceModalLive } from "../upload-invoice-modal-live";
 import { useExtractStream, type ExtractedInvoice } from "@/lib/use-extract-stream";
 import { ExtractedFieldsCard } from "../extracted-fields-card";
 import { loadAutomation } from "@/lib/automation-settings";
+import {
+  getStream,
+  startStream,
+  updateStream,
+  useStreamEntry,
+} from "@/lib/extract-registry";
+import { parse as parsePartial, Allow } from "partial-json";
 
 type LiveAttachment = { filename: string; mimeType: string; attachmentId: string; size: number };
 type LiveMessage = {
@@ -296,6 +303,11 @@ function MessageDetail({
   const [extractions, setExtractions] = useState<Record<string, ExtractedInvoice>>({});
   const [savedAttachmentIds, setSavedAttachmentIds] = useState<Set<string>>(new Set());
   const stream = useExtractStream();
+  // Subscribe to ANY registry change so this pane re-renders while a background
+  // auto-extract on one of this message's attachments is still streaming. We
+  // pass null to the hook because we want subscription only — the actual lookup
+  // per attachment happens inside the .map below.
+  useStreamEntry(null);
 
   const fromName = message.from.replace(/<.*>$/, "").replace(/^"|"$/g, "").trim() || message.from;
   const fromEmail = message.from.match(/<([^>]+)>/)?.[1] ?? message.from;
@@ -397,10 +409,19 @@ function MessageDetail({
               {message.attachments.map((a) => {
                 const isPdf = /pdf/i.test(a.mimeType) || /\.pdf$/i.test(a.filename);
                 const cached = extractions[a.attachmentId];
-                const isStreamingHere = stream.streaming && activeAttachmentId === a.attachmentId;
-                const partialHere = activeAttachmentId === a.attachmentId ? stream.partial : null;
-                const errorHere = activeAttachmentId === a.attachmentId ? stream.error : null;
-                const saved = savedAttachmentIds.has(a.attachmentId);
+                // Read the singleton registry so an in-flight auto-extract
+                // surfaces its live partial in this pane too.
+                const auto = getStream(a.attachmentId);
+                const autoStreaming = !!auto?.streaming;
+                const isStreamingHere =
+                  (stream.streaming && activeAttachmentId === a.attachmentId) || autoStreaming;
+                const partialHere =
+                  activeAttachmentId === a.attachmentId
+                    ? stream.partial
+                    : auto?.extracted ?? auto?.partial ?? null;
+                const errorHere =
+                  (activeAttachmentId === a.attachmentId ? stream.error : null) ?? auto?.error ?? null;
+                const saved = savedAttachmentIds.has(a.attachmentId) || !!auto?.extracted;
                 const display = cached ?? (partialHere as ExtractedInvoice | null);
                 return (
                   <li key={a.attachmentId} className="border-b border-border last:border-0">
@@ -471,19 +492,91 @@ function MessageDetail({
   );
 }
 
-// Background extraction for newly-arrived messages. Uses the non-streaming
-// endpoint since there's no progressive-UI surface for autonomous runs — we
-// just need the structured JSON to land in the captured-invoice store, where
-// the bills queue auto-coding takes over.
+// Background extraction for newly-arrived messages. Uses the streaming endpoint
+// AND publishes partial state to the extract-registry so the right-pane
+// MessageDetail can render the same field-by-field reveal if the user clicks
+// the row mid-flight. On done, persists the captured invoice — bills-queue
+// auto-coding takes over from there.
 async function autoExtract(message: LiveMessage, attachment: LiveAttachment): Promise<void> {
-  const res = await fetch("/api/extract/invoice", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ source: "gmail", messageId: message.id, attachmentId: attachment.attachmentId }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-  const ex = data.extracted as ExtractedInvoice;
+  const attId = attachment.attachmentId;
+  const entry = startStream(attId);
+  const startedAt = entry.startedAt;
+
+  let res: Response;
+  try {
+    res = await fetch("/api/extract/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "gmail", messageId: message.id, attachmentId: attId }),
+    });
+  } catch (e) {
+    updateStream(attId, { streaming: false, error: (e as Error).message });
+    throw e;
+  }
+
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => ({}));
+    const msg = (data as { error?: string }).error ?? `HTTP ${res.status}`;
+    updateStream(attId, { streaming: false, error: msg });
+    throw new Error(msg);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let extracted: ExtractedInvoice | null = null;
+  let streamError: string | null = null;
+
+  outer: while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      let event = "message";
+      let dataRaw = "";
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:")) dataRaw += line.slice(5).trim();
+      }
+      if (!dataRaw) continue;
+      let data: { raw?: string; extracted?: ExtractedInvoice; error?: string } = {};
+      try {
+        data = JSON.parse(dataRaw);
+      } catch {
+        continue;
+      }
+      const elapsed = Math.round(performance.now() - startedAt);
+      if (event === "text" && typeof data.raw === "string") {
+        const cleaned = data.raw.replace(/^```(?:json)?\s*/i, "");
+        let partial: Partial<ExtractedInvoice> | null = null;
+        try {
+          partial = parsePartial(cleaned, Allow.ALL) as Partial<ExtractedInvoice>;
+        } catch {
+          /* keep previous partial */
+        }
+        updateStream(attId, { partial, elapsedMs: elapsed });
+      } else if (event === "done" && data.extracted) {
+        extracted = data.extracted;
+        updateStream(attId, {
+          partial: data.extracted,
+          extracted: data.extracted,
+          streaming: false,
+          elapsedMs: elapsed,
+        });
+        break outer;
+      } else if (event === "error") {
+        streamError = data.error ?? "stream error";
+        updateStream(attId, { streaming: false, error: streamError, elapsedMs: elapsed });
+        break outer;
+      }
+    }
+  }
+
+  if (streamError) throw new Error(streamError);
+  if (!extracted) throw new Error("Stream ended without a parsed extraction.");
 
   const fromName = message.from.replace(/<.*>$/, "").replace(/^"|"$/g, "").trim() || message.from;
   const fromEmail = message.from.match(/<([^>]+)>/)?.[1] ?? message.from;
@@ -496,23 +589,23 @@ async function autoExtract(message: LiveMessage, attachment: LiveAttachment): Pr
     source: {
       kind: "gmail",
       messageId: message.id,
-      attachmentId: attachment.attachmentId,
+      attachmentId: attId,
       fromEmail,
       fromName,
       subject: message.subject,
     },
-    vendorName: ex.vendor_name,
-    vendorEmail: ex.vendor_email,
-    invoiceNumber: ex.invoice_number,
-    issueDate: ex.issue_date,
-    dueDate: ex.due_date,
+    vendorName: extracted.vendor_name,
+    vendorEmail: extracted.vendor_email,
+    invoiceNumber: extracted.invoice_number,
+    issueDate: extracted.issue_date,
+    dueDate: extracted.due_date,
     poNumber: null,
-    projectRefRaw: ex.project_ref,
-    subtotal: ex.subtotal,
-    tax: ex.tax,
-    total: ex.total,
-    currency: ex.currency,
-    lines: (ex.line_items ?? []).map((li) => ({
+    projectRefRaw: extracted.project_ref,
+    subtotal: extracted.subtotal,
+    tax: extracted.tax,
+    total: extracted.total,
+    currency: extracted.currency,
+    lines: (extracted.line_items ?? []).map((li) => ({
       description: li.description,
       quantity: li.quantity,
       unitPrice: li.unit_price,
