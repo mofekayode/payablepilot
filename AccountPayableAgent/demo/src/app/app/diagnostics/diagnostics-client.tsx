@@ -47,9 +47,9 @@ export function DiagnosticsClient() {
   const [setupResult, setSetupResult] = useState<
     | {
         ok: true;
-        vendor?: { displayName: string; created: boolean } | null;
-        project?: { displayName: string; created: boolean } | null;
-        notes?: string[];
+        vendors: Array<{ displayName: string; created: boolean }>;
+        projects: Array<{ displayName: string; created: boolean }>;
+        notes: string[];
       }
     | { ok: false; error: string }
     | null
@@ -114,8 +114,8 @@ export function DiagnosticsClient() {
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setSetupResult({
         ok: true,
-        vendor: data.vendor ?? null,
-        project: data.project ?? null,
+        vendors: data.vendors ?? [],
+        projects: data.projects ?? [],
         notes: data.notes ?? [],
       });
     } catch (e) {
@@ -396,30 +396,44 @@ export function DiagnosticsClient() {
             </div>
           )}
           {setupResult && setupResult.ok && (
-            <div className="px-5 py-3 text-[12.5px] border-b border-neutral-100 bg-emerald-50 text-emerald-900 space-y-1">
-              {setupResult.vendor && (
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <div>
-                    <strong>Vendor:</strong>{" "}
-                    {setupResult.vendor.created
-                      ? `Created ${setupResult.vendor.displayName} in QuickBooks.`
-                      : `${setupResult.vendor.displayName} already exists.`}
-                  </div>
+            <div className="px-5 py-3 text-[12.5px] border-b border-neutral-100 bg-emerald-50 text-emerald-900 space-y-2">
+              <div className="flex items-start gap-2">
+                <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <div>
+                  <strong>
+                    Vendors ({setupResult.vendors.filter((v) => v.created).length} created,
+                    {" "}
+                    {setupResult.vendors.filter((v) => !v.created).length} already existed):
+                  </strong>
+                  <ul className="mt-1 ml-4 list-disc text-emerald-800">
+                    {setupResult.vendors.map((v) => (
+                      <li key={v.displayName}>
+                        {v.displayName}
+                        {!v.created && <span className="text-emerald-700/70"> (existing)</span>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              )}
-              {setupResult.project && (
-                <div className="flex items-start gap-2">
-                  <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <div>
-                    <strong>Project:</strong>{" "}
-                    {setupResult.project.created
-                      ? `Created ${setupResult.project.displayName} in QuickBooks.`
-                      : `${setupResult.project.displayName} already exists.`}
-                  </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <div>
+                  <strong>
+                    Projects ({setupResult.projects.filter((p) => p.created).length} created,
+                    {" "}
+                    {setupResult.projects.filter((p) => !p.created).length} already existed):
+                  </strong>
+                  <ul className="mt-1 ml-4 list-disc text-emerald-800">
+                    {setupResult.projects.map((p) => (
+                      <li key={p.displayName}>
+                        {p.displayName}
+                        {!p.created && <span className="text-emerald-700/70"> (existing)</span>}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              )}
-              {(setupResult.notes ?? []).map((n, i) => (
+              </div>
+              {setupResult.notes.map((n, i) => (
                 <div key={i} className="flex items-start gap-2 text-amber-900">
                   <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <div>{n}</div>
