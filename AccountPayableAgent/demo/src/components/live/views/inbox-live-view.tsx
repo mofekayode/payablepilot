@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RefreshCw,
   Paperclip,
@@ -15,10 +15,11 @@ import {
 import Link from "next/link";
 import type { LiveView } from "../sidebar-live";
 import { cn } from "@/lib/utils";
-import { addCaptured, newCaptured } from "@/lib/captured-store";
+import { addCaptured, loadCaptured, newCaptured } from "@/lib/captured-store";
 import { UploadInvoiceModalLive } from "../upload-invoice-modal-live";
 import { useExtractStream, type ExtractedInvoice } from "@/lib/use-extract-stream";
 import { ExtractedFieldsCard } from "../extracted-fields-card";
+import { loadAutomation } from "@/lib/automation-settings";
 
 type LiveAttachment = { filename: string; mimeType: string; attachmentId: string; size: number };
 type LiveMessage = {
@@ -85,6 +86,71 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Auto-extraction state. We only auto-extract messages that *arrive after*
+  // the first inbox load, so opening the app doesn't fire a flood of Claude
+  // calls against the user's existing backlog.
+  const initialIdsRef = useRef<Set<string> | null>(null);
+  const inFlightRef = useRef<Set<string>>(new Set());
+  const [autoStatus, setAutoStatus] = useState<Record<string, "extracting" | "captured" | "error">>({});
+
+  useEffect(() => {
+    if (state.kind !== "ready") return;
+    const messages = state.messages;
+    if (messages.length === 0) return;
+
+    // First successful fetch: stamp every message ID as "initial" so we don't
+    // auto-process the user's existing backlog.
+    if (initialIdsRef.current === null) {
+      initialIdsRef.current = new Set(messages.map((m) => m.id));
+      // Also seed any messages already in the captured store so we don't double-process.
+      const captured = loadCaptured();
+      const alreadyCaptured = new Set(
+        captured
+          .filter((c) => c.source.kind === "gmail")
+          .map((c) => c.source.kind === "gmail" && c.source.messageId)
+          .filter((s): s is string => typeof s === "string")
+      );
+      const initialStatus: Record<string, "captured"> = {};
+      messages.forEach((m) => {
+        if (alreadyCaptured.has(m.id)) initialStatus[m.id] = "captured";
+      });
+      if (Object.keys(initialStatus).length) setAutoStatus((s) => ({ ...s, ...initialStatus }));
+      return;
+    }
+
+    // Settings gate.
+    const settings = loadAutomation();
+    if (!settings.autoExtractFields) return;
+
+    // Subsequent fetches: anything not in the initial set is "new". Auto-extract
+    // PDFs we haven't seen.
+    const captured = loadCaptured();
+    const capturedMessageIds = new Set(
+      captured
+        .filter((c) => c.source.kind === "gmail")
+        .map((c) => c.source.kind === "gmail" && c.source.messageId)
+        .filter((s): s is string => typeof s === "string")
+    );
+
+    for (const m of messages) {
+      if (initialIdsRef.current.has(m.id)) continue;
+      if (capturedMessageIds.has(m.id)) {
+        if (autoStatus[m.id] !== "captured") setAutoStatus((s) => ({ ...s, [m.id]: "captured" }));
+        continue;
+      }
+      if (inFlightRef.current.has(m.id)) continue;
+      const pdf = m.attachments.find((a) => /pdf/i.test(a.mimeType) || /\.pdf$/i.test(a.filename));
+      if (!pdf) continue;
+      inFlightRef.current.add(m.id);
+      setAutoStatus((s) => ({ ...s, [m.id]: "extracting" }));
+      autoExtract(m, pdf)
+        .then(() => setAutoStatus((s) => ({ ...s, [m.id]: "captured" })))
+        .catch(() => setAutoStatus((s) => ({ ...s, [m.id]: "error" })))
+        .finally(() => inFlightRef.current.delete(m.id));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
   const messages = state.kind === "ready" ? state.messages : [];
   const open = messages.find((m) => m.id === openId) ?? null;
   const notConnected =
@@ -143,6 +209,7 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
           {messages.map((m) => {
             const fromName = m.from.replace(/<.*>$/, "").replace(/^"|"$/g, "").trim() || m.from;
             const selected = m.id === openId;
+            const auto = autoStatus[m.id];
             return (
               <button
                 key={m.id}
@@ -162,12 +229,29 @@ export function InboxLiveView({ onNavigate }: { onNavigate: (v: LiveView) => voi
                   <span className="font-medium">{m.subject || "(no subject)"}</span>
                   <span className="text-muted font-normal"> · {m.snippet}</span>
                 </div>
-                {m.attachmentNames.length > 0 && (
-                  <div className="mt-1 flex items-center gap-1 text-[11px] text-muted">
-                    <Paperclip className="w-3 h-3" /> {m.attachmentNames[0]}
-                    {m.attachmentNames.length > 1 && ` +${m.attachmentNames.length - 1}`}
-                  </div>
-                )}
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted flex-wrap">
+                  {m.attachmentNames.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Paperclip className="w-3 h-3" /> {m.attachmentNames[0]}
+                      {m.attachmentNames.length > 1 && ` +${m.attachmentNames.length - 1}`}
+                    </span>
+                  )}
+                  {auto === "extracting" && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-brand-soft text-brand font-medium">
+                      <span className="w-2 h-2 rounded-full bg-brand animate-pulse" /> Auto-extracting…
+                    </span>
+                  )}
+                  {auto === "captured" && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium">
+                      <Check className="w-2.5 h-2.5" /> In bills queue
+                    </span>
+                  )}
+                  {auto === "error" && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-medium">
+                      <AlertCircle className="w-2.5 h-2.5" /> Auto-extract failed
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -385,6 +469,70 @@ function MessageDetail({
       </div>
     </div>
   );
+}
+
+// Background extraction for newly-arrived messages. Uses the non-streaming
+// endpoint since there's no progressive-UI surface for autonomous runs — we
+// just need the structured JSON to land in the captured-invoice store, where
+// the bills queue auto-coding takes over.
+async function autoExtract(message: LiveMessage, attachment: LiveAttachment): Promise<void> {
+  const res = await fetch("/api/extract/invoice", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source: "gmail", messageId: message.id, attachmentId: attachment.attachmentId }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+  const ex = data.extracted as ExtractedInvoice;
+
+  const fromName = message.from.replace(/<.*>$/, "").replace(/^"|"$/g, "").trim() || message.from;
+  const fromEmail = message.from.match(/<([^>]+)>/)?.[1] ?? message.from;
+
+  const meta = newCaptured();
+  addCaptured({
+    id: meta.id,
+    createdAt: meta.createdAt,
+    status: "extracted",
+    source: {
+      kind: "gmail",
+      messageId: message.id,
+      attachmentId: attachment.attachmentId,
+      fromEmail,
+      fromName,
+      subject: message.subject,
+    },
+    vendorName: ex.vendor_name,
+    vendorEmail: ex.vendor_email,
+    invoiceNumber: ex.invoice_number,
+    issueDate: ex.issue_date,
+    dueDate: ex.due_date,
+    poNumber: null,
+    projectRefRaw: ex.project_ref,
+    subtotal: ex.subtotal,
+    tax: ex.tax,
+    total: ex.total,
+    currency: ex.currency,
+    lines: (ex.line_items ?? []).map((li) => ({
+      description: li.description,
+      quantity: li.quantity,
+      unitPrice: li.unit_price,
+      amount: li.amount,
+      projectRef: li.project_ref,
+    })),
+    qboVendorId: null,
+    qboVendorName: null,
+    qboVendorSource: null,
+    qboProjectId: null,
+    qboProjectName: null,
+    qboProjectSource: null,
+    qboAccountId: null,
+    qboAccountName: null,
+    qboAccountSource: null,
+    qboBillId: null,
+    postedAt: null,
+    errorMessage: null,
+    duplicateOfBillId: null,
+  });
 }
 
 // Cheap structural check used by the inbox poller — same IDs in the same
