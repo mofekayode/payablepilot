@@ -132,25 +132,31 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
   //       and is now seeing the same invoice come in again.
   useEffect(() => {
     // ---------- (a) local duplicate detection ----------
+    // Build an index of (vendor, invoiceNumber) → earliest captured invoice.
+    // Posted rows DO go into the index — they're valid anchors for flagging
+    // any subsequent extracted/ready row that's about to post the same bill.
+    // Only the flagging step skips already-posted rows (no need to block).
     const seen = new Map<string, CapturedInvoice>();
     const pending: Array<{ id: string; dupId: string }> = [];
     const cleared: string[] = [];
-    // Walk oldest first so a newer item gets flagged against an older one.
     [...items]
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .forEach((it) => {
-        if (it.status === "posted") return;
         if (!it.invoiceNumber) return;
         const key = `${(it.qboVendorId ?? it.vendorName ?? "?").toLowerCase()}::${it.invoiceNumber.toLowerCase()}`;
         const earlier = seen.get(key);
         if (earlier && it.id !== earlier.id) {
-          // Mark this row as a local dup of the earlier one. Use the local
-          // captured id (prefixed) so we can distinguish from QBO bill IDs.
-          const tag = `local:${earlier.id}`;
+          if (it.status === "posted") return; // already in QBO — nothing to block
+          // Prefer the earlier row's QBO bill ID if it's been posted; that
+          // gives the user a real reference. Otherwise fall back to a local:
+          // tag so the banner can switch its copy.
+          const tag = earlier.qboBillId
+            ? earlier.qboBillId
+            : `local:${earlier.id}`;
           if (it.duplicateOfBillId !== tag) pending.push({ id: it.id, dupId: tag });
         } else {
           seen.set(key, it);
-          // Clear stale local-dup flags if they no longer apply.
+          // Clear a stale local-dup flag if there's no longer a conflict.
           if (typeof it.duplicateOfBillId === "string" && it.duplicateOfBillId.startsWith("local:")) {
             cleared.push(it.id);
           }
