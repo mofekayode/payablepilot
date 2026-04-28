@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Puppeteer authed-capture profile (contains login cookies)
+.puppeteer-profile
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

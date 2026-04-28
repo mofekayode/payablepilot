@@ -1,9 +1,17 @@
 // Capture screenshots of every key screen in the app for documentation.
-// Run with the dev server already up on http://localhost:4380.
 //
-//   node scripts/capture-screenshots.mjs
+// Default mode (CI / clean): launches a fresh headless browser, captures the
+// unauthenticated state. Useful to confirm empty-state copy looks right.
 //
-// Output: ../../docs/screenshots/*.png at the repo root.
+// Authed mode: pass --auth to use a persistent profile under .puppeteer-profile/.
+// First run opens a visible browser so you can sign in via /settings (Connect
+// Gmail + Connect QuickBooks) — close the window when done. Subsequent --auth
+// runs reuse that profile and capture the connected views.
+//
+//   node scripts/capture-screenshots.mjs            # fresh, headless
+//   node scripts/capture-screenshots.mjs --auth     # uses saved login
+//
+// Override target with PP_BASE env var (default http://localhost:4380).
 
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -12,7 +20,9 @@ import puppeteer from "puppeteer";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "..", "..", "..", "docs", "screenshots");
+const PROFILE = join(HERE, "..", ".puppeteer-profile");
 const BASE = process.env.PP_BASE ?? "http://localhost:4380";
+const AUTH = process.argv.includes("--auth");
 
 const SHOTS = [
   { slug: "01-landing", url: "/", title: "Landing page" },
@@ -29,13 +39,32 @@ const SHOTS = [
 
 async function main() {
   await mkdir(OUT, { recursive: true });
+  if (AUTH) await mkdir(PROFILE, { recursive: true });
+
   const browser = await puppeteer.launch({
-    headless: "new",
+    // In auth mode, use a saved profile (so cookies persist) and run visibly so
+    // a fresh login can be performed interactively. In default mode, headless.
+    headless: AUTH ? false : "new",
+    userDataDir: AUTH ? PROFILE : undefined,
     defaultViewport: { width: 1440, height: 900, deviceScaleFactor: 2 },
+    args: AUTH ? ["--no-first-run", "--no-default-browser-check"] : undefined,
   });
   try {
-    const page = await browser.newPage();
+    const pages = await browser.pages();
+    const page = pages[0] ?? (await browser.newPage());
     page.setDefaultTimeout(15000);
+
+    if (AUTH) {
+      // First-run / not-yet-signed-in helper: drop the user on /settings so they
+      // can connect both integrations, then press Enter in the terminal to start
+      // the captures. On subsequent runs, /settings just shows them connected
+      // and they can immediately press Enter.
+      await page.goto(`${BASE}/settings`, { waitUntil: "domcontentloaded" });
+      console.log(
+        "Auth mode: a Chromium window is open at /settings. Sign in / confirm both integrations are connected, then come back here and press Enter."
+      );
+      await new Promise((r) => process.stdin.once("data", r));
+    }
 
     for (const shot of SHOTS) {
       const url = `${BASE}${shot.url}`;
