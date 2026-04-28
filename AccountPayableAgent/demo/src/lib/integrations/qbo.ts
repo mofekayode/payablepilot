@@ -115,8 +115,14 @@ export type QboBill = { Id: string; DocNumber?: string; TxnDate?: string; TotalA
 export type QboProject = { Id: string; DisplayName: string; ParentRef?: { value: string; name?: string }; Active?: boolean };
 export type QboAccount = { Id: string; Name: string; AccountType?: string; AccountSubType?: string };
 
-export async function listVendors(limit = 25): Promise<QboVendor[]> {
-  const res = await authedFetch(`/query?query=${encodeURIComponent(`select * from Vendor maxresults ${limit}`)}`);
+export async function listVendors(limit = 500): Promise<QboVendor[]> {
+  // Default 500 (QBO caps queries at 1000) — small bookkeeper portfolios fit
+  // easily, big ones page later. Order by DisplayName so the result is stable.
+  // The previous default of 25 was clipping freshly-created vendors off the
+  // end of the list, breaking auto-vendor-match against the most recent seeds.
+  const res = await authedFetch(
+    `/query?query=${encodeURIComponent(`select * from Vendor where Active = true orderby DisplayName maxresults ${limit}`)}`
+  );
   if (!res.ok) throw new Error(`QBO listVendors failed: ${res.status} ${await res.text()}`);
   const data = (await res.json()) as { QueryResponse?: { Vendor?: QboVendor[] } };
   return data.QueryResponse?.Vendor ?? [];
@@ -129,7 +135,7 @@ export async function listBills(limit = 25): Promise<QboBill[]> {
   return data.QueryResponse?.Bill ?? [];
 }
 
-export async function listProjects(limit = 50): Promise<QboProject[]> {
+export async function listProjects(limit = 500): Promise<QboProject[]> {
   // Modern path: companies with the Projects feature on store projects as
   // Customer rows with IsProject=true.
   const modernRes = await authedFetch(
@@ -155,7 +161,7 @@ export async function listProjects(limit = 50): Promise<QboProject[]> {
   throw new Error(`QBO listProjects failed: ${modernRes.status} ${text}`);
 }
 
-export async function listAccounts(limit = 100): Promise<QboAccount[]> {
+export async function listAccounts(limit = 500): Promise<QboAccount[]> {
   // Useful for picking a default expense account when posting bills.
   const res = await authedFetch(
     `/query?query=${encodeURIComponent(`select Id, Name, AccountType, AccountSubType from Account where Active = true and AccountType = 'Expense' maxresults ${limit}`)}`
@@ -203,7 +209,7 @@ export async function findVendorByName(displayName: string): Promise<QboVendor |
 
 // Pulls a few active customers (NOT projects). Used by the demo-setup helper
 // because creating a project requires a parent Customer in QBO.
-export async function listCustomers(limit = 10): Promise<QboProject[]> {
+export async function listCustomers(limit = 100): Promise<QboProject[]> {
   const res = await authedFetch(
     `/query?query=${encodeURIComponent(`select Id, DisplayName, Active from Customer where Active = true maxresults ${limit}`)}`
   );
