@@ -231,7 +231,7 @@ export function UploadInvoiceModalLive({
                 onUploaded();
                 close();
               }}
-              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90"
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 whitespace-nowrap shrink-0"
             >
               Open bills queue <ArrowRight className="w-3.5 h-3.5" />
             </button>

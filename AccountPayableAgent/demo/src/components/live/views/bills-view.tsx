@@ -79,13 +79,28 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
         }
       }
 
-      // Project — fuzzy match against the extracted project_ref string.
-      if (projects.length > 0 && !it.qboProjectId && it.projectRefRaw) {
-        const match = fuzzyProjectMatch(it.projectRefRaw, projects);
-        if (match) {
-          patch.qboProjectId = match.Id;
-          patch.qboProjectName = match.DisplayName;
-          patch.qboProjectSource = "auto";
+      // Project — fuzzy match against everything we know about the invoice
+      // that could mention a job/property. We feed the matcher the explicit
+      // project_ref, every line item's per-line project_ref, the line-item
+      // descriptions (often carry the property/unit), and the vendor name.
+      // Catches cases where Claude returned just the bare job number for
+      // project_ref but the full project name appears in line items.
+      if (projects.length > 0 && !it.qboProjectId) {
+        const haystack = [
+          it.projectRefRaw ?? "",
+          ...it.lines.map((l) => l.projectRef ?? ""),
+          ...it.lines.map((l) => l.description),
+          it.vendorName ?? "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        if (haystack) {
+          const match = fuzzyProjectMatch(haystack, projects);
+          if (match) {
+            patch.qboProjectId = match.Id;
+            patch.qboProjectName = match.DisplayName;
+            patch.qboProjectSource = "auto";
+          }
         }
       }
 
@@ -106,15 +121,50 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendors.length, projects.length, accounts.length, items.length]);
 
-  // Duplicate-detection pass: for each captured row that has both a QBO vendor
-  // and an extracted invoice number, ask QBO whether a Bill already exists on
-  // that pair. We only check rows we haven't already classified to avoid
-  // hammering the API on every render.
+  // Duplicate detection runs in two layers:
+  //   (a) local — within the bills queue itself. If two captured invoices share
+  //       (vendorName-or-vendorId, invoiceNumber), the more recently created
+  //       one is flagged as a dup of the earlier one. Catches the case where
+  //       the same invoice arrives via email AND was uploaded manually before
+  //       either has been posted.
+  //   (b) remote — query QBO for an existing Bill on the same (vendorId,
+  //       docNumber). Catches the case where the user already posted a bill
+  //       and is now seeing the same invoice come in again.
   useEffect(() => {
+    // ---------- (a) local duplicate detection ----------
+    const seen = new Map<string, CapturedInvoice>();
+    const pending: Array<{ id: string; dupId: string }> = [];
+    const cleared: string[] = [];
+    // Walk oldest first so a newer item gets flagged against an older one.
+    [...items]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .forEach((it) => {
+        if (it.status === "posted") return;
+        if (!it.invoiceNumber) return;
+        const key = `${(it.qboVendorId ?? it.vendorName ?? "?").toLowerCase()}::${it.invoiceNumber.toLowerCase()}`;
+        const earlier = seen.get(key);
+        if (earlier && it.id !== earlier.id) {
+          // Mark this row as a local dup of the earlier one. Use the local
+          // captured id (prefixed) so we can distinguish from QBO bill IDs.
+          const tag = `local:${earlier.id}`;
+          if (it.duplicateOfBillId !== tag) pending.push({ id: it.id, dupId: tag });
+        } else {
+          seen.set(key, it);
+          // Clear stale local-dup flags if they no longer apply.
+          if (typeof it.duplicateOfBillId === "string" && it.duplicateOfBillId.startsWith("local:")) {
+            cleared.push(it.id);
+          }
+        }
+      });
+    pending.forEach(({ id, dupId }) => updateCaptured(id, { duplicateOfBillId: dupId }));
+    cleared.forEach((id) => updateCaptured(id, { duplicateOfBillId: null }));
+
+    // ---------- (b) remote duplicate detection ----------
     items.forEach(async (it) => {
       if (it.status === "posted") return;
       if (!it.qboVendorId || !it.invoiceNumber) return;
-      // Already checked.
+      // Skip if already flagged (local or remote). Re-running for already-
+      // classified rows would also be ok, but we'd hammer the API.
       if (it.duplicateOfBillId !== null && it.duplicateOfBillId !== undefined) return;
       try {
         const url = new URL("/api/integrations/qbo/bills/check", window.location.origin);
@@ -130,7 +180,7 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((i) => `${i.id}:${i.qboVendorId ?? ""}:${i.invoiceNumber ?? ""}`).join("|")]);
+  }, [items.map((i) => `${i.id}:${i.qboVendorId ?? ""}:${i.vendorName ?? ""}:${i.invoiceNumber ?? ""}:${i.status}`).join("|")]);
 
   const reviewable = items.filter((i) => i.status === "extracted" || i.status === "ready" || i.status === "error");
   const posted = items.filter((i) => i.status === "posted");
@@ -370,11 +420,23 @@ function BillRow({
             <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
               <div className="flex-1">
-                <div className="font-semibold">Duplicate of bill #{item.duplicateOfBillId} in QuickBooks.</div>
-                <div className="mt-0.5 text-rose-700/90">
-                  This vendor + invoice number combination is already on file. Posting blocked. Remove this row, or
-                  change the invoice number if this is genuinely a different bill.
-                </div>
+                {item.duplicateOfBillId.startsWith("local:") ? (
+                  <>
+                    <div className="font-semibold">Duplicate of another row in this queue.</div>
+                    <div className="mt-0.5 text-rose-700/90">
+                      Another captured invoice with the same vendor and invoice number is already waiting to post.
+                      Posting blocked. Remove this row, or change the invoice number if these are different bills.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-semibold">Duplicate of bill #{item.duplicateOfBillId} in QuickBooks.</div>
+                    <div className="mt-0.5 text-rose-700/90">
+                      This vendor + invoice number combination is already on file. Posting blocked. Remove this row, or
+                      change the invoice number if this is genuinely a different bill.
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -656,29 +718,63 @@ function fuzzyVendorMatch(extracted: string, vendors: Vendor[]): Vendor | null {
   return null;
 }
 
-// Project fuzzy match. The extracted reference is messy ("Job #JOB-2026-0418 ·
-// 418 Maple St HVAC Spring Tune-Up"), so we look for any project whose name
-// shares a meaningful token sequence with the extracted value.
+// Project fuzzy match. Real-world inputs are messy: Claude sometimes returns
+// the full descriptive job line, sometimes just the bare job number ("JOB-2026-0418"),
+// sometimes neither and only the property address shows up in line items. So
+// the matcher tries three passes, in order:
+//   1. Substring   — project name appears verbatim in the extracted haystack
+//   2. Numeric     — the project name's number tokens (with leading zeros
+//                    stripped) appear in the haystack ("0418" matches "418")
+//   3. Token overlap — non-numeric word overlap with a soft threshold
 function fuzzyProjectMatch(extracted: string, projects: Project[]): Project | null {
-  const tokens = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, " ")
-      .split(/\s+/)
-      .filter((t) => t.length >= 3);
-  const target = tokens(extracted);
-  if (target.length === 0) return null;
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const haystack = normalize(extracted);
+  if (!haystack) return null;
+
+  // Pass 1: project name fully contained in the extracted text.
+  for (const p of projects) {
+    const cand = normalize(p.DisplayName);
+    if (cand && haystack.includes(cand)) return p;
+  }
+
+  // Tokens that pass our minimum length, plus leading-zero-stripped numeric variants.
+  const tokens = (s: string) => {
+    const out: string[] = [];
+    for (const t of normalize(s).split(" ")) {
+      if (t.length < 3) continue;
+      out.push(t);
+      if (/^\d+$/.test(t)) {
+        const stripped = t.replace(/^0+/, "");
+        if (stripped && stripped !== t && stripped.length >= 1) out.push(stripped);
+      }
+    }
+    return out;
+  };
+  const haystackTokens = new Set(tokens(extracted));
+
+  // Pass 2: numeric-token match. If the project's distinctive numbers
+  // (job/unit/property #) appear in the haystack, that's usually enough on its
+  // own — addresses are unique signals.
+  for (const p of projects) {
+    const candTokens = tokens(p.DisplayName);
+    const numericCand = candTokens.filter((t) => /\d/.test(t));
+    if (numericCand.length === 0) continue;
+    const numericHits = numericCand.filter((t) => haystackTokens.has(t)).length;
+    if (numericHits >= 1) return p;
+  }
+
+  // Pass 3: word-overlap fallback with a soft threshold (was 0.4, lowered to
+  // 0.25 so a short project name with a couple of matching tokens wins).
   let best: { p: Project; score: number } | null = null;
   for (const p of projects) {
-    const candidate = tokens(p.DisplayName);
-    if (candidate.length === 0) continue;
-    const overlap = candidate.filter((t) => target.includes(t)).length;
+    const candTokens = tokens(p.DisplayName);
+    if (candTokens.length === 0) continue;
+    const overlap = candTokens.filter((t) => haystackTokens.has(t)).length;
     if (overlap === 0) continue;
-    const score = overlap / Math.min(candidate.length, target.length);
+    const score = overlap / Math.min(candTokens.length, haystackTokens.size);
     if (!best || score > best.score) best = { p, score };
   }
-  // Require some real overlap before claiming an auto-match.
-  return best && best.score >= 0.4 ? best.p : null;
+  return best && best.score >= 0.25 ? best.p : null;
 }
 
 // Pick an expense account based on what the invoice looks like. Heuristic
