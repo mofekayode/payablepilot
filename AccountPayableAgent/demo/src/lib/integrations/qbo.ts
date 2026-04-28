@@ -115,13 +115,12 @@ export type QboBill = { Id: string; DocNumber?: string; TxnDate?: string; TotalA
 export type QboProject = { Id: string; DisplayName: string; ParentRef?: { value: string; name?: string }; Active?: boolean };
 export type QboAccount = { Id: string; Name: string; AccountType?: string; AccountSubType?: string };
 
-export async function listVendors(limit = 500): Promise<QboVendor[]> {
-  // Default 500 (QBO caps queries at 1000) — small bookkeeper portfolios fit
-  // easily, big ones page later. Order by DisplayName so the result is stable.
-  // The previous default of 25 was clipping freshly-created vendors off the
-  // end of the list, breaking auto-vendor-match against the most recent seeds.
+export async function listVendors(limit = 1000): Promise<QboVendor[]> {
+  // No filter, no orderby — maximum compatibility with QBO sandbox quirks.
+  // Returns inactive vendors too; auto-matcher just compares names so a stray
+  // inactive entry doesn't hurt anything.
   const res = await authedFetch(
-    `/query?query=${encodeURIComponent(`select * from Vendor where Active = true orderby DisplayName maxresults ${limit}`)}`
+    `/query?query=${encodeURIComponent(`select * from Vendor maxresults ${limit}`)}`
   );
   if (!res.ok) throw new Error(`QBO listVendors failed: ${res.status} ${await res.text()}`);
   const data = (await res.json()) as { QueryResponse?: { Vendor?: QboVendor[] } };
