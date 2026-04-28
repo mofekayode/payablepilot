@@ -84,10 +84,11 @@ export function ProjectsView() {
         {state.kind === "ready" && state.projects.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-background p-10 text-center">
             <Briefcase className="w-6 h-6 text-muted mx-auto" />
-            <div className="mt-2 text-[15px] font-medium">No projects in QuickBooks yet.</div>
+            <div className="mt-2 text-[15px] font-medium">No projects or jobs in QuickBooks yet.</div>
             <div className="mt-1 text-[13px] text-muted max-w-md mx-auto">
-              Enable Projects in QuickBooks (Settings → Account and Settings → Advanced → Projects). Once you create one,
-              it shows up here.
+              Create a project in QuickBooks (or use the &quot;Set up demo vendor&quot; button on the diagnostics page).
+              Modern QBO companies show these under Projects; legacy companies show them as Jobs — PayablePilot picks up
+              both.
             </div>
           </div>
         )}
