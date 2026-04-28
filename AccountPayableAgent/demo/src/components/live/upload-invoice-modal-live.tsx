@@ -1,10 +1,12 @@
 "use client";
-import { useCallback, useRef, useState } from "react";
-import { Upload, X, FileText, Check, AlertCircle, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Upload, X, FileText, Check, AlertCircle, ArrowRight } from "lucide-react";
 import { addCaptured, newCaptured } from "@/lib/captured-store";
+import { useExtractStream, type ExtractedInvoice } from "@/lib/use-extract-stream";
+import { ExtractedFieldsCard } from "./extracted-fields-card";
 import { cn } from "@/lib/utils";
 
-type Phase = "idle" | "uploading" | "extracting" | "done" | "error";
+type Phase = "idle" | "reading" | "extracting" | "saved" | "error";
 
 export function UploadInvoiceModalLive({
   open,
@@ -17,152 +19,106 @@ export function UploadInvoiceModalLive({
 }) {
   const [dragOver, setDragOver] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const [doneFile, setDoneFile] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const stream = useExtractStream();
+  const savedRef = useRef(false);
+
+  // Once Claude finishes streaming, persist the captured invoice and shift to
+  // the "saved" phase. The button-row in saved state lets the user keep the
+  // modal open or jump to the Bills queue.
+  useEffect(() => {
+    if (!stream.extracted || savedRef.current || !fileName) return;
+    savedRef.current = true;
+    const meta = newCaptured();
+    const ex = stream.extracted;
+    addCaptured({
+      id: meta.id,
+      createdAt: meta.createdAt,
+      status: "extracted",
+      source: { kind: "upload", fileName, sizeKb: 0 },
+      vendorName: ex.vendor_name,
+      vendorEmail: ex.vendor_email,
+      invoiceNumber: ex.invoice_number,
+      issueDate: ex.issue_date,
+      dueDate: ex.due_date,
+      poNumber: null,
+      projectRefRaw: ex.project_ref,
+      subtotal: ex.subtotal,
+      tax: ex.tax,
+      total: ex.total,
+      currency: ex.currency,
+      lines: (ex.line_items ?? []).map((li) => ({
+        description: li.description,
+        quantity: li.quantity,
+        unitPrice: li.unit_price,
+        amount: li.amount,
+        projectRef: li.project_ref,
+      })),
+      qboVendorId: null,
+      qboVendorName: null,
+      qboVendorSource: null,
+      qboProjectId: null,
+      qboProjectName: null,
+      qboProjectSource: null,
+      qboAccountId: null,
+      qboAccountName: null,
+      qboAccountSource: null,
+      qboBillId: null,
+      postedAt: null,
+      errorMessage: null,
+      duplicateOfBillId: null,
+    });
+    setPhase("saved");
+  }, [stream.extracted, fileName]);
+
+  useEffect(() => {
+    if (stream.error) setPhase("error");
+  }, [stream.error]);
 
   const handleFile = useCallback(
     async (file: File) => {
-      setError(null);
-      setPhase("uploading");
+      setReadError(null);
+      setFileName(file.name);
+      savedRef.current = false;
+      setPhase("reading");
       try {
         const buf = await file.arrayBuffer();
         const base64 = bytesToBase64(new Uint8Array(buf));
         setPhase("extracting");
-        // Streaming endpoint — final 'done' event carries the parsed JSON. We
-        // still want the modal to show "Extracting…" through the run since the
-        // bills queue is the right place for the field-by-field reveal.
-        const res = await fetch("/api/extract/stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source: "upload", base64 }),
-        });
-        if (!res.ok || !res.body) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error((data as { error?: string }).error ?? `HTTP ${res.status}`);
-        }
-        type Extracted = {
-          vendor_name: string | null;
-          vendor_email: string | null;
-          invoice_number: string | null;
-          issue_date: string | null;
-          due_date: string | null;
-          po_number: string | null;
-          project_ref: string | null;
-          subtotal: number | null;
-          tax: number | null;
-          total: number | null;
-          currency: string | null;
-          line_items: Array<{
-            description: string;
-            quantity: number | null;
-            unit_price: number | null;
-            amount: number | null;
-            project_ref: string | null;
-          }>;
-        };
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let extracted: Extracted | null = null;
-        let streamError: string | null = null;
-
-        outer: while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let idx;
-          while ((idx = buffer.indexOf("\n\n")) >= 0) {
-            const block = buffer.slice(0, idx);
-            buffer = buffer.slice(idx + 2);
-            let event = "message";
-            let dataRaw = "";
-            for (const line of block.split("\n")) {
-              if (line.startsWith("event:")) event = line.slice(6).trim();
-              else if (line.startsWith("data:")) dataRaw += line.slice(5).trim();
-            }
-            if (!dataRaw) continue;
-            let data: { extracted?: Extracted; error?: string } = {};
-            try {
-              data = JSON.parse(dataRaw);
-            } catch {
-              continue;
-            }
-            if (event === "done" && data.extracted) {
-              extracted = data.extracted;
-              break outer;
-            }
-            if (event === "error") {
-              streamError = data.error ?? "stream error";
-              break outer;
-            }
-          }
-        }
-
-        if (streamError) throw new Error(streamError);
-        if (!extracted) throw new Error("Stream ended without a parsed extraction.");
-
-        const meta = newCaptured();
-        addCaptured({
-          id: meta.id,
-          createdAt: meta.createdAt,
-          status: "extracted",
-          source: { kind: "upload", fileName: file.name, sizeKb: Math.round(file.size / 1024) },
-          vendorName: extracted.vendor_name,
-          vendorEmail: extracted.vendor_email,
-          invoiceNumber: extracted.invoice_number,
-          issueDate: extracted.issue_date,
-          dueDate: extracted.due_date,
-          poNumber: extracted.po_number,
-          projectRefRaw: extracted.project_ref,
-          subtotal: extracted.subtotal,
-          tax: extracted.tax,
-          total: extracted.total,
-          currency: extracted.currency,
-          lines: (extracted.line_items ?? []).map((li) => ({
-            description: li.description,
-            quantity: li.quantity,
-            unitPrice: li.unit_price,
-            amount: li.amount,
-            projectRef: li.project_ref,
-          })),
-          qboVendorId: null,
-          qboVendorName: null,
-          qboVendorSource: null,
-          qboProjectId: null,
-          qboProjectName: null,
-          qboProjectSource: null,
-          qboAccountId: null,
-          qboAccountName: null,
-          qboAccountSource: null,
-          qboBillId: null,
-          postedAt: null,
-          errorMessage: null,
-          duplicateOfBillId: null,
-        });
-        setDoneFile(file.name);
-        setPhase("done");
-        setTimeout(() => {
-          onUploaded();
-          onClose();
-          setPhase("idle");
-          setDoneFile(null);
-        }, 1100);
+        await stream.run({ source: "upload", base64 });
       } catch (e) {
-        setError((e as Error).message);
+        setReadError((e as Error).message);
         setPhase("error");
       }
     },
-    [onClose, onUploaded]
+    [stream]
   );
+
+  const reset = useCallback(() => {
+    stream.reset();
+    setPhase("idle");
+    setFileName(null);
+    setReadError(null);
+    savedRef.current = false;
+  }, [stream]);
+
+  const close = useCallback(() => {
+    if (phase === "reading" || phase === "extracting") return;
+    onClose();
+    // Reset on next tick so animations don't flash.
+    setTimeout(reset, 100);
+  }, [phase, onClose, reset]);
 
   if (!open) return null;
 
+  const showFields = phase === "extracting" || phase === "saved" || (phase === "error" && stream.partial);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px] grid place-items-center p-6">
-      <div className="w-full max-w-[540px] bg-background rounded-2xl border border-border shadow-[0_24px_64px_rgba(15,23,42,0.25)] overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+      <div className="w-full max-w-[640px] max-h-[calc(100vh-3rem)] bg-background rounded-2xl border border-border shadow-[0_24px_64px_rgba(15,23,42,0.25)] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-md bg-foreground text-background grid place-items-center">
               <Upload className="w-4 h-4" />
@@ -173,107 +129,121 @@ export function UploadInvoiceModalLive({
             </div>
           </div>
           <button
-            onClick={() => {
-              if (phase === "uploading" || phase === "extracting") return;
-              onClose();
-              setPhase("idle");
-              setError(null);
-            }}
-            className="w-8 h-8 rounded-full hover:bg-surface grid place-items-center text-muted"
+            onClick={close}
+            disabled={phase === "reading" || phase === "extracting"}
+            className="w-8 h-8 rounded-full hover:bg-surface grid place-items-center text-muted disabled:opacity-30"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-5">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(false);
-              const f = e.dataTransfer.files?.[0];
-              if (f) handleFile(f);
-            }}
-            onClick={() => phase === "idle" && inputRef.current?.click()}
-            className={cn(
-              "rounded-xl border-2 border-dashed transition-colors p-8 grid place-items-center text-center",
-              phase === "idle" && "cursor-pointer",
-              dragOver
-                ? "border-brand bg-brand-soft/40"
-                : phase === "error"
-                  ? "border-rose-300 bg-rose-50"
-                  : "border-border hover:border-foreground/30 hover:bg-surface"
-            )}
-          >
-            {phase === "done" && (
-              <>
-                <div className="w-12 h-12 rounded-full bg-emerald-600 text-white grid place-items-center">
-                  <Check className="w-6 h-6" />
-                </div>
-                <div className="mt-3 text-[14px] font-medium">{doneFile} sent to bills queue</div>
-                <div className="mt-1 text-[12px] text-muted">Match it to a vendor and project, then post.</div>
-              </>
-            )}
-            {(phase === "uploading" || phase === "extracting") && (
-              <>
-                <div className="w-12 h-12 rounded-full bg-brand text-white grid place-items-center">
-                  <Sparkles className="w-6 h-6 animate-pulse" />
-                </div>
-                <div className="mt-3 text-[14px] font-medium">
-                  {phase === "uploading" ? "Reading file…" : "Extracting invoice fields…"}
-                </div>
-                <div className="mt-1 text-[12px] text-muted">Vendor, line items, totals, project reference.</div>
-              </>
-            )}
-            {phase === "error" && (
-              <>
-                <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-700 grid place-items-center">
-                  <AlertCircle className="w-6 h-6" />
-                </div>
-                <div className="mt-3 text-[14px] font-medium text-rose-800">Extraction failed</div>
-                <div className="mt-1 text-[12px] text-rose-700 max-w-md">{error}</div>
-                <button
-                  onClick={() => {
-                    setPhase("idle");
-                    setError(null);
-                  }}
-                  className="mt-3 text-[12.5px] underline text-rose-800"
-                >
-                  Try another file
-                </button>
-              </>
-            )}
-            {phase === "idle" && (
-              <>
-                <div className="w-12 h-12 rounded-full bg-surface border border-border grid place-items-center">
-                  <FileText className="w-6 h-6 text-muted" />
-                </div>
-                <div className="mt-3 text-[14px] font-medium">Drag a PDF here</div>
-                <div className="mt-1 text-[12px] text-muted">or click to browse · PDF only · up to 20 MB</div>
-              </>
-            )}
-            <input
-              ref={inputRef}
-              type="file"
-              accept="application/pdf"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleFile(f);
-                e.target.value = "";
+        <div className="flex-1 overflow-auto p-5 space-y-4">
+          {phase === "idle" && (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
               }}
-            />
-          </div>
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleFile(f);
+              }}
+              onClick={() => inputRef.current?.click()}
+              className={cn(
+                "rounded-xl border-2 border-dashed transition-colors p-8 grid place-items-center text-center cursor-pointer",
+                dragOver ? "border-brand bg-brand-soft/40" : "border-border hover:border-foreground/30 hover:bg-surface"
+              )}
+            >
+              <div className="w-12 h-12 rounded-full bg-surface border border-border grid place-items-center">
+                <FileText className="w-6 h-6 text-muted" />
+              </div>
+              <div className="mt-3 text-[14px] font-medium">Drag a PDF here</div>
+              <div className="mt-1 text-[12px] text-muted">or click to browse · PDF only · up to 20 MB</div>
+              <input
+                ref={inputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleFile(f);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+          )}
 
-          <div className="mt-4 text-[11.5px] text-muted leading-relaxed">
-            We&apos;ll extract the vendor, invoice number, line items, totals, and project / job reference, then drop it
-            into your bills queue ready for review.
+          {phase !== "idle" && fileName && (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-surface">
+              <div className="w-9 h-9 rounded bg-background grid place-items-center shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1 text-[13px] font-medium truncate">{fileName}</div>
+              {phase === "saved" && (
+                <span className="inline-flex items-center gap-1 text-[11.5px] font-medium text-emerald-700">
+                  <Check className="w-3.5 h-3.5" /> Saved to bills queue
+                </span>
+              )}
+            </div>
+          )}
+
+          {phase === "reading" && (
+            <div className="rounded-lg border border-dashed border-border p-6 text-center">
+              <div className="w-10 h-10 rounded-full border-2 border-brand border-t-transparent animate-spin mx-auto" />
+              <div className="mt-3 text-[13.5px] font-medium">Reading file…</div>
+            </div>
+          )}
+
+          {showFields && (
+            <ExtractedFieldsCard
+              data={(stream.partial ?? {}) as Partial<ExtractedInvoice>}
+              streaming={phase === "extracting"}
+              elapsedMs={stream.elapsedMs}
+            />
+          )}
+
+          {phase === "error" && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-[12.5px] text-rose-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <div className="font-semibold">Extraction failed</div>
+                <div className="mt-0.5">{stream.error ?? readError ?? "Unknown error"}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-border bg-surface/40 shrink-0">
+          <div className="text-[11.5px] text-muted">
+            {phase === "saved"
+              ? "Auto-coding will run against your QuickBooks vendors and projects on the bills queue."
+              : phase === "extracting" || phase === "reading"
+                ? "Hang tight — fields appear as the agent reads them."
+                : "We extract vendor, totals, line items, and any project / job reference."}
           </div>
+          {phase === "saved" && (
+            <button
+              onClick={() => {
+                onUploaded();
+                close();
+              }}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90"
+            >
+              Open bills queue <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {phase === "error" && (
+            <button
+              onClick={reset}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border text-[12.5px] hover:bg-background"
+            >
+              Try another file
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -281,7 +251,6 @@ export function UploadInvoiceModalLive({
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
-  // Chunked encoding so very large PDFs don't blow the call stack.
   let binary = "";
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize) {
