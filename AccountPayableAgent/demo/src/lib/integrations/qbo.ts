@@ -247,6 +247,26 @@ export async function createProject(displayName: string, parentCustomerId: strin
   return data.Customer;
 }
 
+// Soft-delete (void) a Bill in QBO. The API requires the current SyncToken so
+// we fetch the bill first, then post the delete with the right token.
+// Idempotent enough for cleanup — if the bill is already gone, returns false.
+export async function deleteBill(billId: string): Promise<boolean> {
+  type BillWithSync = QboBill & { SyncToken?: string };
+  const fetchRes = await authedFetch(`/bill/${encodeURIComponent(billId)}`);
+  if (fetchRes.status === 404) return false;
+  if (!fetchRes.ok) throw new Error(`QBO fetch bill failed: ${fetchRes.status} ${await fetchRes.text()}`);
+  const fetchData = (await fetchRes.json()) as { Bill?: BillWithSync };
+  const bill = fetchData.Bill;
+  if (!bill?.Id || !bill.SyncToken) return false;
+
+  const delRes = await authedFetch(`/bill?operation=delete&minorversion=70`, {
+    method: "POST",
+    body: JSON.stringify({ Id: bill.Id, SyncToken: bill.SyncToken }),
+  });
+  if (!delRes.ok) throw new Error(`QBO deleteBill failed: ${delRes.status} ${await delRes.text()}`);
+  return true;
+}
+
 // Look for an existing Bill on the same vendor with the same DocNumber. Used for
 // duplicate detection — we don't want to post the same invoice twice. Returns
 // the first match (Intuit returns the most recent first by default) or null.

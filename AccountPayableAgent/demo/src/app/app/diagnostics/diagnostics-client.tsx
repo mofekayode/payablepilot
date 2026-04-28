@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { PilotMark } from "@/components/pilot-mark";
 import { cn } from "@/lib/utils";
+import { loadCaptured, saveCaptured } from "@/lib/captured-store";
 
 type Step = {
   id: string;
@@ -44,6 +45,12 @@ export function DiagnosticsClient() {
   const [running, setRunning] = useState(false);
   const [postedBillId, setPostedBillId] = useState<string | null>(null);
   const [setupBusy, setSetupBusy] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState<"local" | "remote" | null>(null);
+  const [cleanupResult, setCleanupResult] = useState<
+    | null
+    | { ok: true; deleted: number; failed: number; cleared: number; notes: string[] }
+    | { ok: false; error: string }
+  >(null);
   const [setupResult, setSetupResult] = useState<
     | {
         ok: true;
@@ -103,6 +110,56 @@ export function DiagnosticsClient() {
   // is a perfectly legitimate "ok" outcome that the user might still want to
   // see fail explicitly inside the pipeline run.
   const stillLoading = Object.values(probes).some((p) => p.loading);
+
+  async function clearLocalQueue() {
+    if (cleanupBusy) return;
+    if (!window.confirm("Wipe ALL captured invoices from your browser? This affects your local view only — bills already posted to QuickBooks stay there.")) return;
+    setCleanupBusy("local");
+    setCleanupResult(null);
+    const before = loadCaptured().length;
+    saveCaptured([]);
+    setCleanupBusy(null);
+    setCleanupResult({ ok: true, deleted: 0, failed: 0, cleared: before, notes: [] });
+  }
+
+  async function deletePostedBillsAndClearQueue() {
+    if (cleanupBusy) return;
+    const items = loadCaptured();
+    const posted = items.filter((it) => it.qboBillId);
+    const message =
+      posted.length === 0
+        ? "No posted bills to delete in your local queue. Just clear the local queue?"
+        : `Delete ${posted.length} bill(s) from QuickBooks AND clear your local queue (${items.length} captured rows total)? This is irreversible in QBO.`;
+    if (!window.confirm(message)) return;
+    setCleanupBusy("remote");
+    setCleanupResult(null);
+    try {
+      let deleted = 0;
+      let failed = 0;
+      const notes: string[] = [];
+      if (posted.length > 0) {
+        const res = await fetch("/api/integrations/qbo/bills/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: posted.map((p) => p.qboBillId) }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        const results = (data.results ?? []) as Array<{ id: string; deleted: boolean; error?: string }>;
+        deleted = results.filter((r) => r.deleted).length;
+        failed = results.length - deleted;
+        results
+          .filter((r) => !r.deleted)
+          .forEach((r) => notes.push(`Bill #${r.id}: ${r.error ?? "could not delete"}`));
+      }
+      saveCaptured([]);
+      setCleanupResult({ ok: true, deleted, failed, cleared: items.length, notes });
+    } catch (e) {
+      setCleanupResult({ ok: false, error: (e as Error).message });
+    } finally {
+      setCleanupBusy(null);
+    }
+  }
 
   async function setupDemoData() {
     if (setupBusy) return;
@@ -466,6 +523,60 @@ export function DiagnosticsClient() {
             <span className="ml-3 text-[12px] text-neutral-500">
               Each step reports its own pass / fail. Failures show the exact API error.
             </span>
+          </div>
+        </section>
+
+        <section className="bg-white rounded-xl border border-neutral-200">
+          <div className="px-5 py-3 border-b border-neutral-100 text-[12.5px] uppercase tracking-wider text-neutral-500 font-medium">
+            Test cleanup
+          </div>
+          <div className="p-5 space-y-3">
+            <div className="text-[13px] text-neutral-600 leading-relaxed">
+              Wipe test data while iterating. <strong>Local queue</strong> just empties your browser's captured-invoice
+              list. <strong>Delete posted bills</strong> ALSO calls QuickBooks to remove every bill PayablePilot has
+              posted (matched by the QBO bill IDs we have on file in this browser) — irreversible in QBO.
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={clearLocalQueue}
+                disabled={!!cleanupBusy}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-neutral-300 text-neutral-800 text-[13px] font-medium hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {cleanupBusy === "local" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Clear local queue
+              </button>
+              <button
+                onClick={deletePostedBillsAndClearQueue}
+                disabled={!!cleanupBusy}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-rose-300 bg-rose-50 text-rose-800 text-[13px] font-medium hover:bg-rose-100 disabled:opacity-50"
+              >
+                {cleanupBusy === "remote" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                Delete posted bills + clear queue
+              </button>
+            </div>
+            {cleanupResult && cleanupResult.ok && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12.5px] text-emerald-900 space-y-0.5">
+                <div>
+                  <strong>Deleted from QuickBooks:</strong> {cleanupResult.deleted}
+                  {cleanupResult.failed > 0 ? `, failed: ${cleanupResult.failed}` : ""}
+                </div>
+                <div>
+                  <strong>Cleared from local queue:</strong> {cleanupResult.cleared}
+                </div>
+                {cleanupResult.notes.length > 0 && (
+                  <ul className="mt-1 list-disc ml-4 text-emerald-800/80">
+                    {cleanupResult.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+            {cleanupResult && !cleanupResult.ok && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-800">
+                Cleanup failed: {cleanupResult.error}
+              </div>
+            )}
           </div>
         </section>
 
