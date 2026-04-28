@@ -68,12 +68,29 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
   // (qbo*Source === "manual") are never re-touched.
   useEffect(() => {
     if (items.length === 0) return;
-    items.forEach((it) => {
+    items.forEach(async (it) => {
       const patch: Partial<CapturedInvoice> = {};
 
-      // Vendor — fuzzy name match.
+      // Vendor — fuzzy name match against the loaded list. If the loaded list
+      // doesn't include the vendor (QBO sandbox sometimes silently truncates
+      // the listVendors response), fall back to a direct exact-name lookup.
       if (vendors.length > 0 && !it.qboVendorId && it.vendorName) {
-        const match = fuzzyVendorMatch(it.vendorName, vendors);
+        let match: Vendor | null = fuzzyVendorMatch(it.vendorName, vendors);
+        if (!match) {
+          // Direct query — different code path from listVendors, hits the
+          // single-vendor lookup we know works reliably.
+          try {
+            const url = new URL("/api/integrations/qbo/vendors/find", window.location.origin);
+            url.searchParams.set("name", it.vendorName);
+            const res = await fetch(url.toString(), { cache: "no-store" });
+            if (res.ok) {
+              const data = (await res.json()) as { vendor?: Vendor | null };
+              if (data.vendor?.Id) match = data.vendor;
+            }
+          } catch {
+            /* swallow — auto-coding is best-effort */
+          }
+        }
         if (match) {
           patch.qboVendorId = match.Id;
           patch.qboVendorName = match.DisplayName;
