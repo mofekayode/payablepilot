@@ -44,7 +44,10 @@ export type CapturedInvoice = {
   qboVendorSource: "auto" | "manual" | null;
   qboProjectId: string | null;
   qboProjectName: string | null;
-  qboProjectSource: "auto" | "manual" | null;
+  // "auto" — matched an existing QBO project. "created" — PayablePilot
+  // created this project in QBO because the invoice mentioned one that didn't
+  // exist yet. "manual" — user picked it themselves.
+  qboProjectSource: "auto" | "created" | "manual" | null;
   qboAccountId: string | null;
   qboAccountName: string | null;
   qboAccountSource: "auto" | "manual" | null;

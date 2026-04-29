@@ -206,6 +206,34 @@ export async function findVendorByName(displayName: string): Promise<QboVendor |
   return data.QueryResponse?.Vendor?.[0] ?? null;
 }
 
+// Find a project by exact (case-insensitive) DisplayName. Used by the
+// auto-create flow so we don't make duplicates when the same project name
+// shows up on multiple invoices.
+export async function findProjectByName(displayName: string): Promise<QboProject | null> {
+  const safe = displayName.replace(/'/g, "\\'");
+  // Modern path first.
+  const modernRes = await authedFetch(
+    `/query?query=${encodeURIComponent(`select Id, DisplayName, ParentRef, Active from Customer where IsProject = true and DisplayName = '${safe}'`)}`
+  );
+  if (modernRes.ok) {
+    const data = (await modernRes.json()) as { QueryResponse?: { Customer?: QboProject[] } };
+    const hit = data.QueryResponse?.Customer?.[0];
+    if (hit) return hit;
+  } else {
+    const text = await modernRes.text();
+    if (modernRes.status === 400 && /IsProject not found/i.test(text)) {
+      const legacyRes = await authedFetch(
+        `/query?query=${encodeURIComponent(`select Id, DisplayName, ParentRef, Active from Customer where Job = true and DisplayName = '${safe}'`)}`
+      );
+      if (legacyRes.ok) {
+        const data = (await legacyRes.json()) as { QueryResponse?: { Customer?: QboProject[] } };
+        return data.QueryResponse?.Customer?.[0] ?? null;
+      }
+    }
+  }
+  return null;
+}
+
 // Pulls a few active customers (NOT projects). Used by the demo-setup helper
 // because creating a project requires a parent Customer in QBO.
 export async function listCustomers(limit = 100): Promise<QboProject[]> {

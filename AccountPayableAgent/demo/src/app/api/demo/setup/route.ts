@@ -20,6 +20,7 @@ const VENDORS = [
   { displayName: "BrightBuild Painting", email: "ar@brightbuildpaint.com" },
   { displayName: "Reliable Landscaping Co.", email: "accounts@reliablelandscaping.com" },
   { displayName: "Sunbelt Equipment Rentals", email: "billing@sunbeltrentals.com" },
+  { displayName: "Staples Business Advantage", email: "ar@staples.com" },
 ];
 
 const PROJECTS = [

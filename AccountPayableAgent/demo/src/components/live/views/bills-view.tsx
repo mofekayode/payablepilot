@@ -104,7 +104,7 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
       // descriptions (often carry the property/unit), and the vendor name.
       // Catches cases where Claude returned just the bare job number for
       // project_ref but the full project name appears in line items.
-      if (projects.length > 0 && !it.qboProjectId) {
+      if (!it.qboProjectId) {
         const haystack = [
           it.projectRefRaw ?? "",
           ...it.lines.map((l) => l.projectRef ?? ""),
@@ -113,12 +113,44 @@ export function BillsView({ onNavigate }: { onNavigate: (v: LiveView) => void })
         ]
           .filter(Boolean)
           .join(" ");
-        if (haystack) {
-          const match = fuzzyProjectMatch(haystack, projects);
-          if (match) {
-            patch.qboProjectId = match.Id;
-            patch.qboProjectName = match.DisplayName;
-            patch.qboProjectSource = "auto";
+        let projMatch: Project | null = null;
+        if (projects.length > 0 && haystack) {
+          projMatch = fuzzyProjectMatch(haystack, projects);
+        }
+        if (projMatch) {
+          patch.qboProjectId = projMatch.Id;
+          patch.qboProjectName = projMatch.DisplayName;
+          patch.qboProjectSource = "auto";
+        } else if (it.projectRefRaw && it.projectRefRaw.trim().length > 0) {
+          // No fuzzy match but the invoice clearly mentions a project. Create
+          // it in QBO so the bookkeeper doesn't have to switch tabs.
+          try {
+            const res = await fetch("/api/integrations/qbo/projects/find-or-create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ name: it.projectRefRaw }),
+              cache: "no-store",
+            });
+            if (res.ok) {
+              const data = (await res.json()) as {
+                project?: { Id: string; DisplayName: string };
+                created?: boolean;
+              };
+              if (data.project?.Id) {
+                patch.qboProjectId = data.project.Id;
+                patch.qboProjectName = data.project.DisplayName;
+                patch.qboProjectSource = data.created ? "created" : "auto";
+                // Refresh the local projects list so other rows can fuzzy-match
+                // against the newly created project on the next render.
+                setProjects((prev) =>
+                  prev.some((p) => p.Id === data.project!.Id)
+                    ? prev
+                    : [...prev, { Id: data.project!.Id, DisplayName: data.project!.DisplayName }]
+                );
+              }
+            }
+          } catch {
+            /* swallow — auto-coding is best-effort */
           }
         }
       }
@@ -515,7 +547,8 @@ function BillRow({
               value={item.qboProjectId}
               valueLabel={item.qboProjectName}
               extractedHint={item.projectRefRaw}
-              autoPicked={item.qboProjectSource === "auto"}
+              autoPicked={item.qboProjectSource === "auto" || item.qboProjectSource === "created"}
+              autoPickedLabel={item.qboProjectSource === "created" ? "Created in QBO" : "Auto"}
               clearable
               options={projects.map((p) => ({ id: p.Id, label: p.DisplayName }))}
               onChange={(id, name) => onChangeProject(id, name)}
@@ -634,6 +667,7 @@ function RefPicker({
   valueLabel,
   extractedHint,
   autoPicked,
+  autoPickedLabel,
   options,
   onChange,
   required,
@@ -646,6 +680,7 @@ function RefPicker({
   valueLabel: string | null | undefined;
   extractedHint?: string | null;
   autoPicked?: boolean;
+  autoPickedLabel?: string;
   options: Array<{ id: string; label: string }>;
   onChange: (id: string | null, name: string | null) => void;
   required?: boolean;
@@ -678,7 +713,7 @@ function RefPicker({
           {icon} {label}
           {autoPicked && (
             <span className="ml-auto inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-brand-soft text-brand normal-case tracking-normal text-[10px]">
-              <Sparkles className="w-2.5 h-2.5" /> Auto
+              <Sparkles className="w-2.5 h-2.5" /> {autoPickedLabel ?? "Auto"}
             </span>
           )}
           {!autoPicked && required && !value && <span className="text-amber-700 ml-auto">required</span>}
