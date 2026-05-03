@@ -34,10 +34,8 @@ export function LandingPage() {
     <div className="min-h-screen bg-background text-foreground">
       <TopNav />
       <Hero />
-      <Features />
-      <HowItWorks />
-      <TheMath />
       <InteractiveTour />
+      <HowItWorks />
       <TrustSafe />
       <FinalCta />
       <Footer />
@@ -91,145 +89,45 @@ function TopNav() {
 // -------- Hero --------
 
 function Hero() {
+  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
-    <section className="pt-16 pb-20 px-6">
+    <section className="pt-16 pb-12 px-6">
       <div className="max-w-[1180px] mx-auto">
-        <h1 className="text-[56px] leading-[1.05] font-semibold tracking-tight max-w-[880px]">
-          AP under control.
+        <div className="text-xs uppercase tracking-[0.18em] font-medium text-muted">For bookkeeping firms</div>
+        <h1 className="mt-3 text-[56px] leading-[1.05] font-semibold tracking-tight max-w-[880px]">
+          AP automation,
           <br />
-          Without adding headcount.
+          one mailbox per client.
         </h1>
         <p className="mt-5 text-[18px] leading-[1.6] text-muted max-w-[720px]">
-          PayablePilot reads every invoice that lands in your inbox, matches it against your purchase orders, codes the GL, and posts the bill straight to QuickBooks or Xero. You review. You approve. You go home on time.
+          Onboard each client in five minutes. Connect their Gmail and their QuickBooks, and PayablePilot
+          reads every invoice that arrives, extracts the fields, and queues the bill for your approval.
+          One bookkeeper, many clients, zero data entry.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
           <a
-            href="#demo-video"
+            href="#tour"
             className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
           >
             <PlayCircle className="w-4 h-4" />
-            Watch the 2-minute demo
+            See the interactive tour
           </a>
-          <Link
-            href="/tour"
+          <a
+            href={`${appBase}/sign-up`}
             className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
           >
-            See it live
+            Get started
             <ArrowRight className="w-4 h-4" />
-          </Link>
-          <div className="text-xs text-muted flex items-center gap-2">
-            <BadgeCheck className="w-4 h-4 text-brand" />
-            Setup in one week. 30-day money-back guarantee.
-          </div>
+          </a>
         </div>
 
-        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] text-muted">
-          <span className="uppercase tracking-[0.18em] font-medium">Posts directly to</span>
-          <span className="font-medium text-foreground">QuickBooks Online</span>
-          <span>·</span>
-          <span className="font-medium text-foreground">Xero</span>
-          <span>·</span>
-          <span>more accounting integrations on the way.</span>
-        </div>
-
-        {/* Loom video placeholder */}
-        <div id="demo-video" className="mt-12">
-          <div className="rounded-2xl border border-border bg-background overflow-hidden shadow-[0_30px_80px_-40px_rgba(27,42,74,0.25)]">
-            <div className="px-5 py-3 border-b border-border bg-surface flex items-center gap-3">
-              <span className="flex gap-1.5">
-                <span className="w-3 h-3 rounded-full bg-[#ff5f56]" />
-                <span className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
-                <span className="w-3 h-3 rounded-full bg-[#27c93f]" />
-              </span>
-              <span className="text-xs text-muted font-mono">greenfield-pm-demo.loom</span>
-              <span className="ml-auto text-[11px] text-muted">2 min 10 sec</span>
-            </div>
-            <div className="aspect-video bg-surface">
-              <iframe
-                src="https://www.loom.com/embed/82733eac0b334e3884f8f4c9502fa58e"
-                title="PayablePilot demo"
-                allow="fullscreen; clipboard-write"
-                allowFullScreen
-                className="w-full h-full border-0"
-              />
-            </div>
-          </div>
+        <div className="mt-6 text-[12px] text-muted flex items-center gap-2">
+          <BadgeCheck className="w-4 h-4 text-brand" />
+          Posts directly to QuickBooks Online. You approve every bill.
         </div>
       </div>
     </section>
-  );
-}
-
-// -------- Features --------
-
-function Features() {
-  const daily = [
-    { icon: <Mail className="w-4 h-4" />, title: "Invoice capture from email", body: "Pulls every invoice attachment out of your AP inbox, extracts the fields, and files it." },
-    { icon: <FileText className="w-4 h-4" />, title: "Automatic data extraction", body: "Vendor, invoice number, line items, totals, dates, PO reference, all structured." },
-    { icon: <ClipboardList className="w-4 h-4" />, title: "GL coding", body: "Coded to the right account based on your chart of accounts and vendor history." },
-    { icon: <Check className="w-4 h-4" />, title: "Two and three-way PO match", body: "Matches invoices to POs and signed receiving. Clean ones queue for payment." },
-    { icon: <Ban className="w-4 h-4" />, title: "Duplicate detection", body: "Catches re-sent invoices before they reach your payment run." },
-    { icon: <Sparkles className="w-4 h-4" />, title: "Discrepancy flagging", body: "Drafts a vendor email explaining the variance, and holds payment until you confirm." },
-    { icon: <CreditCard className="w-4 h-4" />, title: "Posts bills to QuickBooks or Xero", body: "Builds today's bills, routes to you for approval, pushes them straight into QuickBooks Online or Xero." },
-  ];
-  const periodic = [
-    { icon: <Clock className="w-4 h-4" />, title: "AP aging reports", body: "Refreshed every hour. Auto-reminders go out past 30, 60, and 90 days." },
-    { icon: <FileSpreadsheet className="w-4 h-4" />, title: "Vendor statement reconciliation", body: "Matches vendor statements line-by-line to your books. Variance gets a reply." },
-    { icon: <ReceiptText className="w-4 h-4" />, title: "W-9 collection and 1099 prep", body: "Tracks thresholds per vendor. Chases missing W-9s. Builds the January packet." },
-    { icon: <Receipt className="w-4 h-4" />, title: "Expense report processing", body: "Reads employee receipts, validates policy, codes and queues for reimbursement." },
-    { icon: <CreditCard className="w-4 h-4" />, title: "Credit card reconciliation", body: "Matches Chase Ink charges to receipts. Chases cardholders for what's missing." },
-    { icon: <CalendarCheck className="w-4 h-4" />, title: "Month-end close support", body: "Accrual suggestions, checklist progress, ready for final sign-off." },
-    { icon: <MailCheck className="w-4 h-4" />, title: "Vendor communication", body: "Every email sent on your behalf. Timestamped, categorized, fully auditable." },
-    { icon: <Users className="w-4 h-4" />, title: "Vendor record maintenance", body: "Terms, GL hints, W-9 status, YTD spend. Updated as invoices flow through." },
-  ];
-
-  return (
-    <section id="features" className="px-6 py-24">
-      <div className="max-w-[1180px] mx-auto">
-        <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-wider text-muted">What it handles</div>
-          <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Everything a great AP clerk does.
-            <br />
-            Running quietly in the background.
-          </h2>
-          <p className="mt-4 text-[16px] leading-[1.6] text-muted">
-            Connects to QuickBooks Online or Xero, matches your chart of accounts, your vendors, your approval chain. Shows its work and asks before it posts anything.
-          </p>
-        </div>
-
-        <div className="mt-14">
-          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-brand mb-4">Daily, while you sleep</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {daily.map((f) => (
-              <FeatureCard key={f.title} {...f} />
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-14">
-          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-accent mb-4">Every week, month, and year</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {periodic.map((f) => (
-              <FeatureCard key={f.title} {...f} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function FeatureCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-background p-5">
-      <div className="w-9 h-9 rounded-md bg-surface border border-border grid place-items-center text-foreground">
-        {icon}
-      </div>
-      <div className="mt-3 text-[15px] font-semibold tracking-tight">{title}</div>
-      <div className="mt-1 text-[13.5px] text-muted leading-[1.55]">{body}</div>
-    </div>
   );
 }
 
@@ -242,24 +140,24 @@ function HowItWorks() {
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-wider text-muted">How it works</div>
           <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Three steps. No data entry.
+            Three steps. Per client. No data entry.
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
           <Step
             num="01"
-            title="We learn your process"
-            body="First two weeks, we study your vendors, GL codes, approval chains, and workflow. No generic setup. Your agent gets opinionated about your business."
+            title="Add a client business"
+            body="Five-minute onboarding. Connect their AP Gmail mailbox and their QuickBooks Online. Each client lives in its own workspace, with row-level isolation."
           />
           <Step
             num="02"
-            title="Your assistant starts processing"
-            body="Invoices arrive by email. PayablePilot extracts, matches, codes, and prepares everything. You get a morning digest with what&apos;s ready for your approval."
+            title="We read every invoice"
+            body="Invoices arriving in the connected mailbox are extracted automatically — vendor, amount, line items, project ref — and matched against the client's existing QBO vendors."
           />
           <Step
             num="03"
-            title="You review and approve"
-            body="Every bill comes to you for approval. One click and it's posted to QuickBooks or Xero. Full visibility, full control, zero data entry."
+            title="You approve and post"
+            body="Bills queue in your inbox tab. One click posts them to QuickBooks. Switch between clients from the workspace menu — same workflow, different books."
           />
         </div>
       </div>
@@ -277,76 +175,22 @@ function Step({ num, title, body }: { num: string; title: string; body: string }
   );
 }
 
-// -------- The math --------
-
-function TheMath() {
-  return (
-    <section className="px-6 py-24">
-      <div className="max-w-[1180px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted">The math</div>
-          <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Get your week back.
-          </h2>
-          <p className="mt-4 text-[16px] leading-[1.65] text-muted">
-            A typical office manager spends 10 to 15 hours a week on AP work that could be running in the background. Invoice entry, PO matching, chasing receipts, tracking W-9s, reconciling statements. PayablePilot handles all of it and posts the result into QuickBooks Online or Xero, so your team spends their time on work that actually moves the business.
-          </p>
-          <ul className="mt-6 space-y-2 text-[14px]">
-            <Bullet text="Setup in one week. No new software to learn." />
-            <Bullet text="Cancel any time." />
-          </ul>
-        </div>
-
-        <div className="rounded-2xl border border-border bg-background p-8">
-          <div className="text-xs uppercase tracking-wider text-muted">What a typical week looks like</div>
-          <div className="mt-5 space-y-4">
-            <Row label="Invoices processed" value="80 - 120" />
-            <Row label="Three-way matches" value="70 - 90" />
-            <Row label="Discrepancies caught" value="3 - 6" />
-            <Row label="Duplicates blocked" value="1 - 2" />
-            <Row label="Vendor emails sent on your behalf" value="15 - 25" />
-            <Row label="Hours of your team's time saved" value="10 - 15" emphasis />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Bullet({ text }: { text: string }) {
-  return (
-    <li className="flex items-start gap-2">
-      <span className="w-5 h-5 rounded-full bg-brand-soft text-brand grid place-items-center shrink-0 mt-[2px]">
-        <Check className="w-3 h-3" />
-      </span>
-      <span className="text-foreground">{text}</span>
-    </li>
-  );
-}
-
-function Row({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 pb-3 border-b border-border last:border-0">
-      <span className="text-[13px] text-muted">{label}</span>
-      <span className={emphasis ? "text-[22px] font-semibold tracking-tight text-foreground" : "text-[15px] font-medium"}>{value}</span>
-    </div>
-  );
-}
-
 // -------- Interactive tour --------
 
 function InteractiveTour() {
   const [open, setOpen] = useState(false);
+  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
-    <section id="tour" className="px-6 py-24 bg-surface border-y border-border">
+    <section id="tour" className="px-6 py-24 bg-background">
       <div className="max-w-[1180px] mx-auto">
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-wider text-muted">Interactive tour</div>
           <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Click through a full day at Greenfield PM.
+            See a day in the life of an AP bookkeeper.
           </h2>
           <p className="mt-4 text-[16px] leading-[1.65] text-muted">
-            Nine scenes, from invoice arriving to discrepancy caught to monthly reconciliations to a chat with the agent. Open the tour and step through at your own pace.
+            Click through a full session: invoices arriving, fields extracted, bills queued, posted to
+            QuickBooks. Step through at your own pace, no signup needed.
           </p>
         </div>
 
@@ -355,23 +199,23 @@ function InteractiveTour() {
         <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
           <div className="text-xs text-muted flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-brand" />
-            The same UI our first customer will use.
+            The same UI you'll use after sign-up.
           </div>
           <div className="flex gap-2">
-            <Link
-              href="/tour"
+            <button
+              onClick={() => setOpen(true)}
               className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-md border border-border bg-background hover:bg-surface"
             >
-              Open tour full-screen
+              Open tour
               <ArrowRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="/demo"
+            </button>
+            <a
+              href={`${appBase}/sign-up`}
               className="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-foreground text-background hover:opacity-90"
             >
-              Drive the live product
+              Get started
               <ArrowRight className="w-4 h-4" />
-            </Link>
+            </a>
           </div>
         </div>
       </div>
@@ -539,34 +383,30 @@ function TourModal({ onClose }: { onClose: () => void }) {
 
 function TrustSafe() {
   return (
-    <section id="safety" className="px-6 py-24">
+    <section id="safety" className="px-6 py-24 bg-surface border-y border-border">
       <div className="max-w-[1180px] mx-auto">
         <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-wider text-muted">Your money is safe</div>
+          <div className="text-xs uppercase tracking-wider text-muted">Your clients' books are safe</div>
           <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            You approve every payment.
+            You approve every bill before it posts.
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
           <TrustCard
             icon={<Lock className="w-4 h-4" />}
-            title="Never touches your bank"
-            body="PayablePilot prepares batches inside your own books. Actual payment execution stays in your hands."
+            title="Never touches the bank"
+            body="PayablePilot prepares bills inside QuickBooks. Payment execution stays in your client's hands."
           />
           <TrustCard
             icon={<ShieldCheck className="w-4 h-4" />}
-            title="Every payment gets your approval"
-            body="Nothing leaves your business without an explicit click. Matched or not, we ask."
+            title="Per-client isolation"
+            body="Every business is scoped by Postgres row-level security. One client never sees another's data."
           />
           <TrustCard
             icon={<FileText className="w-4 h-4" />}
             title="Full audit trail"
-            body="Every extraction, every match decision, every email sent on your behalf, logged and searchable."
+            body="Every connection, extraction, and post is logged. Useful for diligence, indispensable for accountants."
           />
-        </div>
-        <div className="mt-8 rounded-xl border border-border bg-surface p-5 text-[14px] text-muted">
-          <span className="font-medium text-foreground">30-day money-back guarantee.</span>{" "}
-          If PayablePilot doesn&apos;t accurately process 80% of your invoices in the first month, we refund the full setup fee.
         </div>
       </div>
     </section>
@@ -586,26 +426,37 @@ function TrustCard({ icon, title, body }: { icon: React.ReactNode; title: string
 // -------- Final CTA --------
 
 function FinalCta() {
+  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
     <section id="cta" className="px-6 py-24 bg-foreground text-background">
       <div className="max-w-[920px] mx-auto text-center">
         <h2 className="text-[44px] leading-[1.1] font-semibold tracking-tight">
-          Get AP under control this week.
+          Onboard your first client this week.
         </h2>
         <p className="mt-4 text-[16px] text-background/75 max-w-[620px] mx-auto">
-          Book a 15-minute walkthrough. We&apos;ll look at your real AP inbox, show you what PayablePilot would handle, and tell you honestly what it wouldn&apos;t.
+          Five-minute setup per client. Connect Gmail and QuickBooks, and PayablePilot starts reading
+          invoices immediately. Try it free with one client — no credit card.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={`${appBase}/sign-up`}
+            className="inline-flex items-center gap-2 h-11 px-6 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
+          >
+            Get started
+            <ArrowRight className="w-4 h-4" />
+          </a>
           <a
             href="https://calendly.com/mofekayode/15min"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 h-11 px-6 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
+            className="inline-flex items-center gap-2 h-11 px-6 rounded-md border border-background/30 text-background text-sm font-medium hover:bg-background/10"
           >
             <Calendar className="w-4 h-4" />
-            Book a 15-minute walkthrough
+            Book a walkthrough instead
           </a>
-          <span className="text-[14px] text-background/70">or email us at hello@payablepilot.com</span>
+        </div>
+        <div className="mt-6 text-[13px] text-background/60">
+          Questions? Email <a href="mailto:hello@payablepilot.com" className="underline hover:text-background">hello@payablepilot.com</a>.
         </div>
       </div>
     </section>
@@ -615,6 +466,7 @@ function FinalCta() {
 // -------- Footer --------
 
 function Footer() {
+  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
     <footer className="px-6 py-10 bg-background border-t border-border">
       <div className="max-w-[1180px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-muted">
@@ -623,14 +475,13 @@ function Footer() {
             <PilotMark className="w-3 h-3" />
           </div>
           <span className="font-semibold text-foreground">PayablePilot</span>
-          <span>© 2026</span>
+          <span>© {new Date().getFullYear()}</span>
         </div>
         <div className="flex items-center gap-5">
-          <a className="hover:text-foreground" href="#">Privacy</a>
-          <a className="hover:text-foreground" href="#">Terms</a>
-          <a className="hover:text-foreground" href="#">Security</a>
-          <Link href="/tour" className="hover:text-foreground">Tour</Link>
-          <Link href="/demo" className="hover:text-foreground">Live product</Link>
+          <Link href="/legal/privacy" className="hover:text-foreground">Privacy</Link>
+          <Link href="/legal/terms" className="hover:text-foreground">Terms</Link>
+          <a href={`${appBase}/sign-in`} className="hover:text-foreground">Sign in</a>
+          <a href="mailto:hello@payablepilot.com" className="hover:text-foreground">Contact</a>
         </div>
       </div>
     </footer>
