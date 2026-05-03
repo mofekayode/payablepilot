@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Calendar,
   PlayCircle,
@@ -13,6 +13,8 @@ import {
   Sparkles,
   BadgeCheck,
   Lock,
+  X,
+  Building2,
 } from "lucide-react";
 import { PilotMark } from "./pilot-mark";
 
@@ -21,8 +23,8 @@ export function LandingPage() {
     <div className="min-h-screen bg-background text-foreground">
       <TopNav />
       <Hero />
-      <ProductTour />
       <HowItWorks />
+      <InteractiveDemo />
       <TrustSafe />
       <FinalCta />
       <Footer />
@@ -47,8 +49,8 @@ function TopNav() {
           <span className="font-semibold tracking-tight text-[17px]">PayablePilot</span>
         </Link>
         <nav className="ml-10 hidden md:flex items-center gap-6 text-sm text-muted">
-          <a href="#tour" className="hover:text-foreground">Tour</a>
           <a href="#how" className="hover:text-foreground">How it works</a>
+          <a href="#demo" className="hover:text-foreground">Demo</a>
           <a href="#safety" className="hover:text-foreground">Safety</a>
         </nav>
         <div className="ml-auto flex items-center gap-2">
@@ -99,11 +101,11 @@ function Hero() {
               <ArrowRight className="w-4 h-4" />
             </a>
             <a
-              href="#tour"
+              href="#demo"
               className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
             >
               <PlayCircle className="w-4 h-4" />
-              See the interactive tour
+              Launch interactive demo
             </a>
           </div>
 
@@ -226,56 +228,12 @@ function ExtractedField({
 
 // -------- How it works --------
 
-function HowItWorks() {
-  return (
-    <section id="how" className="px-6 py-20 bg-background">
-      <div className="max-w-[1180px] mx-auto">
-        <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-wider text-muted">How it works</div>
-          <h2 className="mt-1 text-[36px] sm:text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Three steps. No data entry.
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
-          <Step
-            num="01"
-            title="Connect your books"
-            body="Five-minute setup. Connect Gmail and QuickBooks. Add more workspaces any time — each one is fully isolated."
-          />
-          <Step
-            num="02"
-            title="We read every invoice"
-            body="As invoices arrive, fields are extracted — vendor, amount, line items, project — and matched against your existing QuickBooks vendors automatically."
-          />
-          <Step
-            num="03"
-            title="You approve and post"
-            body="Bills queue in your inbox. One click pushes them to QuickBooks. Posting only happens with your explicit approval."
-          />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Step({ num, title, body }: { num: string; title: string; body: string }) {
-  return (
-    <div className="rounded-2xl border border-border bg-background p-6">
-      <div className="text-[11px] font-mono text-muted">{num}</div>
-      <div className="mt-2 text-[20px] font-semibold tracking-tight">{title}</div>
-      <div className="mt-3 text-[14px] text-muted leading-[1.6]">{body}</div>
-    </div>
-  );
-}
-
-// -------- Product tour --------
-
-const TOUR_STEPS = [
+const HOW_STEPS = [
   {
     id: "arrives",
     eyebrow: "Step 1",
     title: "Invoice arrives in the connected inbox.",
-    body: "Connect your AP Gmail (or any client's). PayablePilot watches for invoice attachments — PDFs, scans, receipts — and picks them up the moment they land.",
+    body: "Connect your AP Gmail. PayablePilot watches for invoice attachments — PDFs, scans, receipts — and picks them up the moment they land.",
   },
   {
     id: "extracted",
@@ -291,20 +249,44 @@ const TOUR_STEPS = [
   },
 ];
 
-function ProductTour() {
+const HOW_INTERVAL_MS = 6000;
+
+function HowItWorks() {
   const [step, setStep] = useState(0);
-  const total = TOUR_STEPS.length;
-  const current = TOUR_STEPS[step];
-  const next = () => setStep((s) => Math.min(total - 1, s + 1));
-  const prev = () => setStep((s) => Math.max(0, s - 1));
+  const [paused, setPaused] = useState(false);
+  const total = HOW_STEPS.length;
+  const current = HOW_STEPS[step];
+
+  // Auto-cycle through steps; pause on hover/focus or when the user takes
+  // manual control (clicking prev/next/dots resets the timer via paused).
+  useEffect(() => {
+    if (paused) return;
+    const t = setTimeout(() => {
+      setStep((s) => (s + 1) % total);
+    }, HOW_INTERVAL_MS);
+    return () => clearTimeout(t);
+  }, [step, paused, total]);
+
+  const goto = (n: number) => {
+    setStep(((n % total) + total) % total);
+  };
+  const next = () => goto(step + 1);
+  const prev = () => goto(step - 1);
 
   return (
-    <section id="tour" className="px-6 py-20 bg-surface border-y border-border">
+    <section
+      id="how"
+      className="px-6 py-20 bg-surface border-y border-border"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
+    >
       <div className="max-w-[1180px] mx-auto">
         <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-wider text-muted">Product tour</div>
+          <div className="text-xs uppercase tracking-wider text-muted">How it works</div>
           <h2 className="mt-1 text-[36px] sm:text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Three clicks. From inbox to QuickBooks.
+            From inbox to QuickBooks, in three steps.
           </h2>
         </div>
 
@@ -320,29 +302,36 @@ function ProductTour() {
 
             <div className="mt-6 flex items-center gap-3">
               <button
-                onClick={prev}
-                disabled={step === 0}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border bg-background text-foreground disabled:opacity-40 hover:bg-surface"
+                onClick={() => {
+                  setPaused(true);
+                  prev();
+                }}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border bg-background text-foreground hover:bg-background"
                 aria-label="Previous step"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
               <button
-                onClick={next}
-                disabled={step === total - 1}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-foreground text-background disabled:opacity-40 hover:opacity-90"
+                onClick={() => {
+                  setPaused(true);
+                  next();
+                }}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-md bg-foreground text-background hover:opacity-90"
                 aria-label="Next step"
               >
                 <ArrowRight className="w-4 h-4" />
               </button>
               <div className="flex items-center gap-1.5 ml-2">
-                {TOUR_STEPS.map((s, i) => (
+                {HOW_STEPS.map((s, i) => (
                   <button
                     key={s.id}
-                    onClick={() => setStep(i)}
+                    onClick={() => {
+                      setPaused(true);
+                      goto(i);
+                    }}
                     className={
                       "h-1.5 rounded-full transition-all " +
-                      (i === step ? "w-6 bg-foreground" : "w-3 bg-border hover:bg-muted")
+                      (i === step ? "w-8 bg-foreground" : "w-3 bg-border hover:bg-muted")
                     }
                     aria-label={`Go to step ${i + 1}`}
                   />
@@ -360,6 +349,349 @@ function ProductTour() {
         </div>
       </div>
     </section>
+  );
+}
+
+// -------- Interactive demo --------
+
+const DEMO_SCENES = [
+  { id: "welcome", title: "Welcome" },
+  { id: "connect", title: "Connect your books" },
+  { id: "arrives", title: "Invoice arrives" },
+  { id: "extracted", title: "Extracted & matched" },
+  { id: "posted", title: "Posted to QuickBooks" },
+  { id: "switch", title: "Manage many businesses" },
+  { id: "outro", title: "You're ready" },
+];
+
+function InteractiveDemo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <section id="demo" className="px-6 py-20 bg-background">
+      <div className="max-w-[1180px] mx-auto text-center">
+        <div className="text-xs uppercase tracking-wider text-muted">Interactive demo</div>
+        <h2 className="mt-1 text-[36px] sm:text-[40px] leading-[1.1] font-semibold tracking-tight">
+          Drive the product yourself.
+        </h2>
+        <p className="mt-3 text-[16px] leading-[1.65] text-muted max-w-[560px] mx-auto">
+          Step through a real session at your own pace — connect, capture, extract, post. No signup, no setup,
+          no scripted demo guide.
+        </p>
+        <button
+          onClick={() => setOpen(true)}
+          className="mt-7 inline-flex items-center gap-2 h-11 px-6 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
+        >
+          <PlayCircle className="w-4 h-4" />
+          Launch interactive demo
+        </button>
+      </div>
+      {open && <DemoModal onClose={() => setOpen(false)} />}
+    </section>
+  );
+}
+
+function DemoModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(0);
+  const total = DEMO_SCENES.length;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const goto = (n: number) => {
+    const next = ((n % total) + total) % total;
+    setStep(next);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  };
+  const nextStep = () => goto(step + 1);
+  const prevStep = () => goto(step - 1);
+
+  // Keyboard nav.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight" || e.key === " ") nextStep();
+      else if (e.key === "ArrowLeft") prevStep();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  // Lock body scroll while open.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
+  const scene = DEMO_SCENES[step];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-foreground/60 backdrop-blur-[3px] grid place-items-center p-4 animate-fade-in-up"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Interactive product demo"
+    >
+      <div
+        className="relative w-full max-w-[1080px] bg-background rounded-2xl overflow-hidden border border-border shadow-[0_40px_120px_rgba(27,42,74,0.45)] flex flex-col max-h-[92vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-3 border-b border-border bg-surface flex items-center gap-3">
+          <div className="w-7 h-7 rounded-md bg-foreground text-background grid place-items-center">
+            <PilotMark className="w-3.5 h-3.5" />
+          </div>
+          <div className="text-[13.5px] font-semibold tracking-tight">PayablePilot</div>
+          <span className="text-muted text-[12px]">·</span>
+          <span className="text-[12.5px] text-muted truncate">{scene.title}</span>
+          <span className="ml-auto text-[11.5px] text-muted tabular-nums">
+            {step + 1} / {total}
+          </span>
+          <button
+            onClick={onClose}
+            className="ml-1 w-8 h-8 rounded-md border border-border bg-background text-muted hover:text-foreground hover:bg-surface grid place-items-center"
+            aria-label="Close demo"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div ref={scrollRef} className="flex-1 overflow-auto scrollbar-thin bg-surface">
+          <div className="p-6 md:p-8 min-h-[440px] flex items-stretch">
+            <div className="flex-1 animate-fade-in-up" key={scene.id}>
+              {scene.id === "welcome" && <DemoWelcome />}
+              {scene.id === "connect" && <DemoConnect />}
+              {scene.id === "arrives" && <DemoFrame><SceneArrives /></DemoFrame>}
+              {scene.id === "extracted" && <DemoFrame><SceneExtracted /></DemoFrame>}
+              {scene.id === "posted" && <DemoFrame><ScenePosted /></DemoFrame>}
+              {scene.id === "switch" && <DemoSwitch />}
+              {scene.id === "outro" && <DemoOutro onClose={onClose} />}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-border bg-background flex items-center gap-3">
+          <button
+            onClick={prevStep}
+            disabled={step === 0}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border bg-background text-foreground disabled:opacity-30 hover:bg-surface"
+            aria-label="Previous"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="flex items-center gap-1.5">
+            {DEMO_SCENES.map((s, i) => (
+              <button
+                key={s.id}
+                onClick={() => goto(i)}
+                className={
+                  "h-1.5 rounded-full transition-all " +
+                  (i === step ? "w-6 bg-foreground" : "w-3 bg-border hover:bg-muted")
+                }
+                aria-label={`Go to scene ${i + 1}: ${s.title}`}
+              />
+            ))}
+          </div>
+          <span className="text-[11px] text-muted hidden sm:inline ml-1">
+            ← / → to navigate · esc to close
+          </span>
+          <button
+            onClick={nextStep}
+            disabled={step === total - 1}
+            className="ml-auto inline-flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background disabled:opacity-30 hover:opacity-90 text-[13px] font-medium"
+          >
+            {step === total - 1 ? "Done" : "Next"}
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DemoFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-background overflow-hidden shadow-[0_30px_80px_-40px_rgba(27,42,74,0.35)]">
+      <div className="px-4 py-2.5 border-b border-border bg-surface flex items-center gap-2 text-[11px] text-muted">
+        <span className="flex gap-1">
+          <span className="w-2 h-2 rounded-full bg-[#ff5f56]" />
+          <span className="w-2 h-2 rounded-full bg-[#ffbd2e]" />
+          <span className="w-2 h-2 rounded-full bg-[#27c93f]" />
+        </span>
+        <span className="font-mono ml-1">app.payablepilot.com</span>
+        <span className="ml-auto inline-flex items-center gap-1 text-emerald-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          Connected
+        </span>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function DemoWelcome() {
+  return (
+    <div className="max-w-[640px] mx-auto text-center pt-8">
+      <div className="text-[12px] uppercase tracking-[0.18em] text-brand font-semibold">A 60-second tour</div>
+      <h3 className="mt-2 text-[34px] sm:text-[38px] leading-[1.1] font-semibold tracking-tight">
+        Watch one invoice go from inbox to QuickBooks.
+      </h3>
+      <p className="mt-4 text-[15.5px] leading-[1.65] text-muted">
+        You'll click through six quick scenes: connecting a workspace, an invoice landing, fields extracted,
+        the bill posted, switching between businesses, and what's next. Use → and ← or the buttons below.
+      </p>
+      <div className="mt-8 inline-flex items-center gap-2 text-[13px] text-muted">
+        <Sparkles className="w-4 h-4 text-brand" />
+        Press → or click Next to start.
+      </div>
+    </div>
+  );
+}
+
+function DemoConnect() {
+  return (
+    <DemoFrame>
+      <div className="text-[10.5px] uppercase tracking-wider text-muted font-semibold">Onboarding · Step 2 of 2</div>
+      <div className="mt-1 text-[20px] font-semibold tracking-tight">Connect Acme HVAC</div>
+      <p className="mt-1 text-[13px] text-muted">
+        Two integrations. Three minutes. Then we start reading invoices.
+      </p>
+      <div className="mt-4 space-y-3">
+        <ConnectRow
+          icon={<Mail className="w-5 h-5 text-rose-600" />}
+          label="Gmail"
+          description="Read invoice emails from this client's AP mailbox."
+          status="connected"
+        />
+        <ConnectRow
+          icon={<FileText className="w-5 h-5 text-emerald-600" />}
+          label="QuickBooks Online"
+          description="Post matched bills, sync vendors and projects."
+          status="connecting"
+        />
+      </div>
+    </DemoFrame>
+  );
+}
+
+function ConnectRow({
+  icon,
+  label,
+  description,
+  status,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  status: "idle" | "connecting" | "connected";
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-3 flex items-center gap-3">
+      <div className="w-9 h-9 rounded-md bg-background border border-border grid place-items-center shrink-0">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-medium text-foreground">{label}</div>
+        <div className="text-[12px] text-muted">{description}</div>
+      </div>
+      {status === "connected" && (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <Check className="w-3 h-3" />
+          Connected
+        </span>
+      )}
+      {status === "connecting" && (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand-soft text-brand">
+          <Sparkles className="w-3 h-3" />
+          Connecting…
+        </span>
+      )}
+      {status === "idle" && (
+        <span className="inline-flex items-center h-7 px-3 rounded-md bg-foreground text-background text-[12px] font-medium">
+          Connect
+        </span>
+      )}
+    </div>
+  );
+}
+
+function DemoSwitch() {
+  return (
+    <DemoFrame>
+      <div className="text-[10.5px] uppercase tracking-wider text-muted font-semibold">Workspace switcher</div>
+      <div className="mt-1 text-[18px] font-semibold tracking-tight">Switch between every business you manage.</div>
+      <p className="mt-1 text-[13px] text-muted">
+        Each workspace is fully isolated. Connections, invoices, vendors, audit log — all scoped per business.
+      </p>
+      <div className="mt-4 rounded-lg border border-border bg-surface p-2 max-w-[420px]">
+        <div className="px-2 py-1 text-[10.5px] uppercase tracking-wider text-muted font-semibold">
+          Your businesses
+        </div>
+        <div className="space-y-0.5">
+          <SwitchRow name="Acme HVAC" hint="3 invoices waiting" active />
+          <SwitchRow name="Cedar Lumber Co" hint="all caught up" />
+          <SwitchRow name="Reliable Landscaping" hint="1 needs review" />
+          <SwitchRow name="Bob's Plumbing" hint="all caught up" />
+        </div>
+        <div className="border-t border-border mt-1 pt-1">
+          <div className="px-2 py-1.5 text-[12px] text-muted hover:text-foreground hover:bg-background rounded-md cursor-default">
+            + Add a business
+          </div>
+        </div>
+      </div>
+    </DemoFrame>
+  );
+}
+
+function SwitchRow({ name, hint, active }: { name: string; hint: string; active?: boolean }) {
+  return (
+    <div
+      className={
+        "flex items-center gap-2 px-2 py-1.5 rounded-md text-[13px] " +
+        (active ? "bg-background border border-border" : "hover:bg-background")
+      }
+    >
+      <span className="w-6 h-6 rounded-md bg-background border border-border grid place-items-center shrink-0">
+        <Building2 className="w-3.5 h-3.5 text-muted" />
+      </span>
+      <span className="flex-1 font-medium text-foreground truncate">{name}</span>
+      <span className="text-[11.5px] text-muted truncate">{hint}</span>
+      {active && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+    </div>
+  );
+}
+
+function DemoOutro({ onClose }: { onClose: () => void }) {
+  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  return (
+    <div className="max-w-[640px] mx-auto text-center pt-6">
+      <div className="w-14 h-14 mx-auto rounded-full bg-emerald-50 text-emerald-700 grid place-items-center">
+        <Check className="w-7 h-7" />
+      </div>
+      <h3 className="mt-5 text-[30px] sm:text-[34px] leading-[1.1] font-semibold tracking-tight">
+        That's the whole loop.
+      </h3>
+      <p className="mt-3 text-[15px] leading-[1.65] text-muted">
+        Connect your books once, then PayablePilot handles capture, extraction, matching, and posting on every
+        invoice that comes in. Try it on your real inbox — free.
+      </p>
+      <div className="mt-7 flex flex-wrap justify-center gap-3">
+        <a
+          href={`${appBase}/sign-up`}
+          className="inline-flex items-center gap-2 h-11 px-6 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90"
+        >
+          Get started free
+          <ArrowRight className="w-4 h-4" />
+        </a>
+        <button
+          onClick={onClose}
+          className="inline-flex items-center gap-2 h-11 px-6 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
+        >
+          Close demo
+        </button>
+      </div>
+    </div>
   );
 }
 
