@@ -94,7 +94,9 @@ export function AppShellLive({
           {view === "inbox" && (
             <InboxLiveView onNavigate={navigate} activeBusinessId={activeBusiness?.id ?? null} />
           )}
-          {view === "bills" && <BillsView onNavigate={navigate} />}
+          {view === "bills" && (
+            <BillsView onNavigate={navigate} activeBusinessId={activeBusiness?.id ?? null} />
+          )}
           {view === "vendors" && <VendorsView />}
           {view === "projects" && <ProjectsView />}
         </main>
