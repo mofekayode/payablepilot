@@ -9,7 +9,7 @@
 // in the existing on-demand path.
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { routeEmail } from "@/lib/routing/route-email";
+import { routeEmail, rememberSenderRoute } from "@/lib/routing/route-email";
 import type { HandlerCtx, HandlerResult } from "./index";
 import type { JobPayloads } from "../types";
 
@@ -59,6 +59,21 @@ export async function processInboundEmail(
         routing_confidence: result.confidence,
       })
       .eq("id", msg.id);
+
+    // Self-training: if AI made the match, persist the (sender → business)
+    // mapping in sender_routes so the next email from this vendor takes
+    // the cheap Layer 1 path instead of paying for another Claude call.
+    if (result.method === "ai_content_match" && msg.from_email) {
+      try {
+        await rememberSenderRoute({
+          firmId: ctx.firmId,
+          fromEmail: msg.from_email,
+          businessId: result.businessId,
+        });
+      } catch (e) {
+        console.error("[process_inbound_email] rememberSenderRoute failed:", (e as Error).message);
+      }
+    }
   } else {
     await markUnmatched(admin, msg.id, "no_match");
   }

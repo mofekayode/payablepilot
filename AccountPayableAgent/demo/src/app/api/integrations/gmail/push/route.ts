@@ -47,6 +47,7 @@ import {
 } from "@/lib/integrations/gmail";
 import { refreshFirmTokens } from "@/lib/integrations/tokens";
 import { enqueue } from "@/lib/queue/enqueue";
+import { runQueueOnce } from "@/lib/queue/worker";
 
 type PubSubEnvelope = {
   message?: {
@@ -169,7 +170,21 @@ export async function POST(req: NextRequest) {
       last_history_id: history.latestHistoryId ?? String(parsed.historyId),
     });
 
-  return NextResponse.json({ ok: true, inserted });
+  // Inline-process the queue right after enqueueing so the just-arrived
+  // emails get routed in the same request (sub-second). The 15-min poller
+  // cron is the safety net — and so is the queue's own retry/backoff —
+  // but the happy path is event-driven end to end.
+  let processed = 0;
+  if (inserted > 0) {
+    try {
+      const r = await runQueueOnce({ batchSize: Math.max(inserted, 5) });
+      processed = r.processed;
+    } catch (e) {
+      console.error("[gmail-push] inline worker tick failed:", e);
+    }
+  }
+
+  return NextResponse.json({ ok: true, inserted, processed });
 }
 
 const ATTACHMENT_PREFETCH_MAX_BYTES = 1_500_000;

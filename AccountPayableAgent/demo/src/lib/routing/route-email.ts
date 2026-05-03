@@ -17,6 +17,7 @@
 // unmatched queue."
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { tryAiMatch } from "./ai-match";
 
 export type RoutingMethod =
   | "sender_history"
@@ -109,17 +110,19 @@ export async function rememberSenderRoute(opts: {
 
 // ---------------- Layer 2: AI content match ----------------
 
-// Stubbed for the first ship. The shape is here so the worker can call it
-// and get a falsy result; the actual Claude call lands in the next pass
-// once we wire in extraction with multi-business candidate selection.
-//
-// When implemented, this should:
-//   1. Fetch the firm's businesses with name/legal_name/dba/ein/addresses.
-//   2. Call Claude with the PDF attachment + the candidate list, asking
-//      it to identify the "Bill To" entity and pick a business.
-//   3. Parse out { businessId, confidence } and gate at >= 0.7.
+// Implementation in ./ai-match.ts. Calls Claude with the PDF + the firm's
+// businesses as candidates and asks it to identify which business the
+// invoice is billed to. Gated at confidence >= 0.7 to avoid bad routing.
 async function tryRouteByAiContentMatch(
-  _input: RouteInput
+  input: RouteInput
 ): Promise<RoutingResult | null> {
-  return null;
+  if (!input.attachment) return null;
+  const match = await tryAiMatch({ firmId: input.firmId, attachment: input.attachment });
+  if (!match) return null;
+  return {
+    businessId: match.businessId,
+    confidence: match.confidence,
+    method: "ai_content_match",
+    details: { reasoning: match.reasoning },
+  };
 }

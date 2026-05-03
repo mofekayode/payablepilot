@@ -97,10 +97,11 @@ export type GmailMessageSummary = {
 // List recent messages in the AP inbox that look like invoices (have attachments).
 // `client` lets the caller pass its own Gmail client (used by the firm-level
 // background poller). When omitted we fall back to the request-scoped client.
+// `newerThan` overrides `days` if set — Gmail accepts "1h" / "30m" / "7d" etc.
 export async function listInvoiceMessages(
-  opts: { maxResults?: number; days?: number; query?: string; client?: gmail_v1.Gmail } = {}
+  opts: { maxResults?: number; days?: number; newerThan?: string; query?: string; client?: gmail_v1.Gmail } = {}
 ): Promise<GmailMessageSummary[]> {
-  const { maxResults = 25, days = 30, query } = opts;
+  const { maxResults = 25, days = 30, newerThan, query } = opts;
   const gmail = opts.client ?? (await getGmailClient());
   if (!gmail) throw new Error("Gmail is not connected.");
 
@@ -108,9 +109,10 @@ export async function listInvoiceMessages(
   // USPS Informed Delivery mail, calendar invites, generic "we sent you a thing"
   // emails, or anything in the Promotions category. Caller can pass `query` to
   // bypass this entirely (used by /api/integrations/gmail/messages?q=).
+  const window = newerThan ?? `${days}d`;
   const q =
     query ??
-    `has:attachment newer_than:${days}d (invoice OR receipt OR bill OR statement OR "amount due" OR "payment due" OR "order confirmation") -filename:ics -category:promotions`;
+    `has:attachment newer_than:${window} (invoice OR receipt OR bill OR statement OR "amount due" OR "payment due" OR "order confirmation") -filename:ics -category:promotions`;
   const list = await gmail.users.messages.list({
     userId: "me",
     q,

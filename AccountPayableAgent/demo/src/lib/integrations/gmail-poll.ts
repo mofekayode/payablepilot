@@ -18,8 +18,20 @@ import {
 import { getTokensForFirm, refreshFirmTokens } from "./tokens";
 import { enqueue } from "@/lib/queue/enqueue";
 
-const MAX_PER_MAILBOX = 25;
+const MAX_PER_MAILBOX = 50;
 const ATTACHMENT_PREFETCH_MAX_BYTES = 1_500_000; // 1.5 MB per attachment cap
+
+// How far back the safety-net poll looks. Push picks things up in real
+// time, so the poll only needs to cover the gap if a notification was
+// dropped. One hour is generous; the dedup-by-message_id check prevents
+// double-ingestion when the windows overlap. Override via
+// GMAIL_POLL_LOOKBACK_MINUTES env var.
+function lookbackWindow(): string {
+  const minutes = Math.max(5, Number(process.env.GMAIL_POLL_LOOKBACK_MINUTES ?? 60));
+  // Gmail accepts compact units. Convert to "Nh" for >=60min, else "Nm".
+  if (minutes >= 60) return `${Math.ceil(minutes / 60)}h`;
+  return `${minutes}m`;
+}
 
 export async function pollAllFirmMailboxes(): Promise<{
   mailboxes: number;
@@ -76,9 +88,16 @@ export async function pollOneFirmMailbox(opts: {
     }
   );
 
-  // Fetch the most recent invoice-flavored messages. Dedup against rows
-  // we've already ingested by Gmail message_id.
-  const messages = await listInvoiceMessages({ client: gmail, maxResults: MAX_PER_MAILBOX, days: 7 });
+  // Fetch the most recent invoice-flavored messages within the safety-net
+  // window. Dedup against rows we've already ingested by Gmail message_id
+  // — that's what prevents the overlap between Push and the next poll
+  // creating duplicate inbox_messages rows (and false-positive duplicate
+  // bill flags downstream).
+  const messages = await listInvoiceMessages({
+    client: gmail,
+    maxResults: MAX_PER_MAILBOX,
+    newerThan: lookbackWindow(),
+  });
   if (messages.length === 0) {
     await touchPollState(opts.connectionId);
     return 0;
