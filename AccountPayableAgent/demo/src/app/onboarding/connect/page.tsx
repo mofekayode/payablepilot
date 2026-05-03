@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getActiveBusiness, requireUser } from "@/lib/auth/current";
 import { isConnected } from "@/lib/integrations/tokens";
+import { getCurrentFirmId, getFirmGmailStatus } from "@/lib/integrations/firm-gmail";
 import { ConnectStep } from "./connect-step";
+import { FirmGmailCard } from "./firm-gmail-card";
 import { PilotMark } from "@/components/pilot-mark";
-import { Mail, BookOpen, Check } from "lucide-react";
+import { BookOpen, Check } from "lucide-react";
 
 export const metadata = { title: "PayablePilot · Connect integrations" };
 
@@ -18,11 +20,15 @@ export default async function OnboardingConnectPage({
   const business = await getActiveBusiness();
   if (!business) redirect("/onboarding/business");
 
-  const [gmailConnected, qboConnected] = await Promise.all([isConnected("gmail"), isConnected("qbo")]);
+  const firmId = await getCurrentFirmId();
+  const [gmail, qboConnected] = await Promise.all([
+    firmId ? getFirmGmailStatus(firmId) : Promise.resolve({ connected: false, email: null, connectionId: null }),
+    isConnected("qbo"),
+  ]);
 
   return (
     <div className="min-h-screen bg-neutral-50 grid place-items-center px-6 py-12">
-      <div className="w-full max-w-[520px]">
+      <div className="w-full max-w-[560px]">
         <div className="flex items-center gap-2.5 mb-8">
           <div className="w-8 h-8 rounded-md bg-neutral-900 text-white grid place-items-center">
             <PilotMark className="w-4 h-4" />
@@ -35,7 +41,8 @@ export default async function OnboardingConnectPage({
           Connect {business.name}
         </h1>
         <p className="mt-1 text-[14px] text-neutral-500">
-          Connect this client's Gmail and QuickBooks. Invoices will start flowing in once both are linked.
+          QuickBooks is per-business. Gmail is shared across every business you manage — connect it once and we
+          route each invoice automatically.
         </p>
 
         {(sp.gmail === "error" || sp.qbo === "error") && (
@@ -45,16 +52,10 @@ export default async function OnboardingConnectPage({
         )}
 
         <div className="mt-6 space-y-3">
-          <ConnectStep
-            name="Gmail"
-            description="Read invoice emails from this client's AP mailbox."
-            icon={<Mail className="w-5 h-5 text-rose-600" />}
-            connected={gmailConnected}
-            connectHref="/api/integrations/gmail/auth"
-          />
+          <FirmGmailCard email={gmail.email} connected={gmail.connected} />
           <ConnectStep
             name="QuickBooks Online"
-            description="Post matched bills, sync vendors, and code expenses."
+            description={`Post matched bills to ${business.name}'s QuickBooks. Each business has its own QBO file.`}
             icon={<BookOpen className="w-5 h-5 text-emerald-600" />}
             connected={qboConnected}
             connectHref="/api/integrations/qbo/auth"
@@ -66,12 +67,12 @@ export default async function OnboardingConnectPage({
             href="/app"
             className={
               "inline-flex items-center justify-center gap-2 h-10 px-4 rounded-md text-[14px] font-medium " +
-              (gmailConnected && qboConnected
+              (gmail.connected && qboConnected
                 ? "bg-neutral-900 text-white hover:opacity-90"
                 : "bg-neutral-100 text-neutral-500")
             }
           >
-            {gmailConnected && qboConnected ? (
+            {gmail.connected && qboConnected ? (
               <>
                 <Check className="w-4 h-4" /> Go to workspace
               </>

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { isConnected } from "@/lib/integrations/tokens";
 import { getActiveBusiness, listAccessibleBusinesses, requireUser } from "@/lib/auth/current";
+import { getCurrentFirmId, getFirmGmailStatus } from "@/lib/integrations/firm-gmail";
 import { fullInboxAddress } from "@/lib/businesses/alias";
 import { SettingsClient } from "./settings-client";
 
@@ -23,7 +24,11 @@ export default async function SettingsPage({
   const active = await getActiveBusiness();
   if (!active) redirect("/onboarding/business");
 
-  const [gmailConnected, qboConnected] = await Promise.all([isConnected("gmail"), isConnected("qbo")]);
+  const firmId = await getCurrentFirmId();
+  const [firmGmail, qboConnected] = await Promise.all([
+    firmId ? getFirmGmailStatus(firmId) : Promise.resolve({ connected: false, email: null, connectionId: null }),
+    isConnected("qbo"),
+  ]);
 
   const h = await headers();
   const proto = h.get("x-forwarded-proto") ?? "http";
@@ -32,7 +37,7 @@ export default async function SettingsPage({
 
   return (
     <SettingsClient
-      gmailConnected={gmailConnected}
+      firmGmail={firmGmail}
       qboConnected={qboConnected}
       flash={{
         gmail: sp.gmail ?? null,

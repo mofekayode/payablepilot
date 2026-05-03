@@ -33,8 +33,10 @@ import { InviteSection } from "./invite-section";
 
 type Flash = { gmail: string | null; qbo: string | null; reason: string | null };
 
+type FirmGmail = { connected: boolean; email: string | null; connectionId: string | null };
+
 export function SettingsClient({
-  gmailConnected,
+  firmGmail,
   qboConnected,
   flash,
   business,
@@ -42,7 +44,7 @@ export function SettingsClient({
   businesses,
   origin,
 }: {
-  gmailConnected: boolean;
+  firmGmail: FirmGmail;
   qboConnected: boolean;
   flash: Flash;
   business: Business;
@@ -78,7 +80,11 @@ export function SettingsClient({
 
   const disconnect = async (provider: "gmail" | "qbo") => {
     setBusy(provider);
-    await fetch(`/api/integrations/${provider}/disconnect`, { method: "POST" });
+    const url =
+      provider === "gmail"
+        ? "/api/integrations/gmail/firm-disconnect"
+        : `/api/integrations/${provider}/disconnect`;
+    await fetch(url, { method: "POST" });
     setBusy(null);
     router.refresh();
   };
@@ -124,21 +130,27 @@ export function SettingsClient({
           <SectionHeader title="Integrations" subtitle="Where invoices come from and where bills get posted." />
           <IntegrationCard
             name="Gmail"
-            description="Read invoice emails from this client's AP mailbox. Read-only — we never send or modify mail."
+            description={
+              firmGmail.connected
+                ? `Reading invoices from ${firmGmail.email ?? "your mailbox"}. Shared across every business — invoices route to the right one automatically.`
+                : "Connect your AP mailbox once. We route every invoice to the right business based on Bill-To and sender history. Shared across all your businesses."
+            }
             icon={<Mail className="w-5 h-5 text-rose-600" />}
-            connected={gmailConnected}
-            connectHref="/api/integrations/gmail/auth"
+            connected={firmGmail.connected}
+            connectHref="/api/integrations/gmail/firm-auth"
             onDisconnect={() => disconnect("gmail")}
             busy={busy === "gmail"}
+            badge="Shared across all businesses"
           />
           <IntegrationCard
             name="QuickBooks Online"
-            description="Post matched bills, sync vendors, and code expenses. You release payments inside QuickBooks."
+            description={`Post matched bills to ${business.name}'s QuickBooks. Each business has its own QBO file.`}
             icon={<BookOpen className="w-5 h-5 text-emerald-600" />}
             connected={qboConnected}
             connectHref="/api/integrations/qbo/auth"
             onDisconnect={() => disconnect("qbo")}
             busy={busy === "qbo"}
+            badge="Per business"
           />
         </section>
 
@@ -392,6 +404,7 @@ function IntegrationCard({
   connectHref,
   onDisconnect,
   busy,
+  badge,
 }: {
   name: string;
   description: string;
@@ -400,6 +413,7 @@ function IntegrationCard({
   connectHref: string;
   onDisconnect: () => void;
   busy: boolean;
+  badge?: string;
 }) {
   return (
     <div className="bg-white rounded-xl border border-neutral-200 p-5">
@@ -417,6 +431,11 @@ function IntegrationCard({
             ) : (
               <span className="inline-flex items-center gap-1 text-[11.5px] font-medium px-2 py-0.5 rounded-full bg-neutral-50 text-neutral-600 border border-neutral-200">
                 Not connected
+              </span>
+            )}
+            {badge && (
+              <span className="inline-flex items-center text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600">
+                {badge}
               </span>
             )}
           </div>
