@@ -72,19 +72,33 @@ export async function setTokensForBusiness(
   provider: Provider,
   tokens: StoredTokens
 ): Promise<void> {
+  // Manual upsert. We can't use supabase-js's .upsert({onConflict: ...})
+  // here because the uniqueness is enforced by a partial index
+  // (`WHERE business_id IS NOT NULL`), and Postgres won't match a partial
+  // index from ON CONFLICT without the matching WHERE predicate, which
+  // the supabase-js helper doesn't expose.
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.from("connections").upsert(
-    {
-      business_id: businessId,
-      provider,
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken ?? null,
-      expires_at: tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null,
-      extra: tokens.extra ?? {},
-    },
-    { onConflict: "business_id,provider" }
-  );
-  if (error) throw new Error(`Failed to persist ${provider} tokens: ${error.message}`);
+  const tokenRow = {
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken ?? null,
+    expires_at: tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null,
+    extra: tokens.extra ?? {},
+  };
+  const { data: existing } = await supabase
+    .from("connections")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("provider", provider)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await supabase.from("connections").update(tokenRow).eq("id", existing.id);
+    if (error) throw new Error(`Failed to update ${provider} tokens: ${error.message}`);
+  } else {
+    const { error } = await supabase
+      .from("connections")
+      .insert({ business_id: businessId, provider, ...tokenRow });
+    if (error) throw new Error(`Failed to insert ${provider} tokens: ${error.message}`);
+  }
   const user = await getCurrentUser();
   await logAudit({
     action: "connection.set",
@@ -142,24 +156,38 @@ export async function setTokensForFirm(
   tokens: StoredTokens,
   opts: { actorUserId?: string | null } = {}
 ): Promise<{ connectionId: string }> {
+  // Manual upsert (see setTokensForBusiness for why supabase-js's .upsert
+  // helper can't be used here — partial unique index limitation).
   const admin = createSupabaseAdminClient();
-  const { data, error } = await admin
+  const tokenRow = {
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken ?? null,
+    expires_at: tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null,
+    extra: tokens.extra ?? {},
+  };
+  const { data: existing } = await admin
     .from("connections")
-    .upsert(
-      {
-        firm_id: firmId,
-        provider,
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken ?? null,
-        expires_at: tokens.expiresAt ? new Date(tokens.expiresAt).toISOString() : null,
-        extra: tokens.extra ?? {},
-      },
-      { onConflict: "firm_id,provider" }
-    )
     .select("id")
-    .single();
-  if (error || !data) {
-    throw new Error(`Failed to persist firm-level ${provider} tokens: ${error?.message ?? "unknown"}`);
+    .eq("firm_id", firmId)
+    .eq("provider", provider)
+    .maybeSingle();
+  let connectionId: string;
+  if (existing) {
+    const { error } = await admin.from("connections").update(tokenRow).eq("id", existing.id);
+    if (error) {
+      throw new Error(`Failed to update firm-level ${provider} tokens: ${error.message}`);
+    }
+    connectionId = existing.id;
+  } else {
+    const { data, error } = await admin
+      .from("connections")
+      .insert({ firm_id: firmId, provider, ...tokenRow })
+      .select("id")
+      .single();
+    if (error || !data) {
+      throw new Error(`Failed to persist firm-level ${provider} tokens: ${error?.message ?? "unknown"}`);
+    }
+    connectionId = data.id;
   }
   await logAudit({
     action: "connection.set",
@@ -167,7 +195,7 @@ export async function setTokensForFirm(
     actorUserId: opts.actorUserId ?? null,
     details: { provider, scope: "firm" },
   });
-  return { connectionId: data.id };
+  return { connectionId };
 }
 
 export async function clearTokensForFirm(
