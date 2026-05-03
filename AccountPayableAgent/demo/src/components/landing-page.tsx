@@ -60,9 +60,8 @@ function TopNav() {
           <span className="font-semibold tracking-tight text-[17px]">PayablePilot</span>
         </Link>
         <nav className="ml-10 hidden md:flex items-center gap-6 text-sm text-muted">
-          <a href="#features" className="hover:text-foreground">What it handles</a>
+          <a href="#tour" className="hover:text-foreground">Tour</a>
           <a href="#how" className="hover:text-foreground">How it works</a>
-          <a href="#tour" className="hover:text-foreground">Live tour</a>
           <a href="#safety" className="hover:text-foreground">Safety</a>
         </nav>
         <div className="ml-auto flex items-center gap-2">
@@ -91,41 +90,154 @@ function TopNav() {
 function Hero() {
   const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
-    <section className="pt-16 pb-12 px-6">
-      <div className="max-w-[1180px] mx-auto">
-        <h1 className="text-[56px] leading-[1.05] font-semibold tracking-tight max-w-[880px]">
-          Stop typing invoices
-          <br />
-          into QuickBooks.
-        </h1>
-        <p className="mt-5 text-[18px] leading-[1.6] text-muted max-w-[720px]">
-          PayablePilot reads every invoice that lands in your inbox, extracts the fields, and queues the bill
-          for your approval. One click and it's posted. Connect as many sets of books as you need.
-        </p>
+    <section className="pt-14 pb-20 px-6">
+      <div className="max-w-[1180px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-10 items-center">
+        <div className="lg:col-span-7">
+          <h1 className="text-[44px] sm:text-[52px] lg:text-[58px] leading-[1.05] font-semibold tracking-tight">
+            Stop typing invoices
+            <br />
+            into QuickBooks.
+          </h1>
+          <p className="mt-5 text-[17px] leading-[1.6] text-muted max-w-[560px]">
+            PayablePilot reads every invoice that lands in your inbox, extracts the fields, and queues the bill
+            for your approval. One click to post. Connect as many sets of books as you need.
+          </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <a
-            href="#tour"
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
-          >
-            <PlayCircle className="w-4 h-4" />
-            See it in action
-          </a>
-          <a
-            href={`${appBase}/sign-up`}
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
-          >
-            Get started free
-            <ArrowRight className="w-4 h-4" />
-          </a>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <a
+              href={`${appBase}/sign-up`}
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90"
+            >
+              Get started free
+              <ArrowRight className="w-4 h-4" />
+            </a>
+            <a
+              href="#tour"
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
+            >
+              <PlayCircle className="w-4 h-4" />
+              See the interactive tour
+            </a>
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <BadgeCheck className="w-4 h-4 text-brand" />
+              Posts to QuickBooks Online
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-brand" />
+              You approve every bill
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-brand" />
+              Free for one workspace
+            </span>
+          </div>
         </div>
 
-        <div className="mt-6 text-[12px] text-muted flex items-center gap-2">
-          <BadgeCheck className="w-4 h-4 text-brand" />
-          Posts directly to QuickBooks Online. You approve every bill.
+        <div className="lg:col-span-5">
+          <HeroVisual />
         </div>
       </div>
     </section>
+  );
+}
+
+function HeroVisual() {
+  return (
+    <div className="relative">
+      {/* Soft backdrop glow */}
+      <div className="absolute -inset-6 -z-10 bg-gradient-to-br from-brand/15 via-transparent to-transparent rounded-[32px] blur-2xl" />
+
+      <div className="rounded-2xl border border-border bg-background overflow-hidden shadow-[0_30px_80px_-40px_rgba(27,42,74,0.35)]">
+        {/* Window chrome */}
+        <div className="px-4 py-2.5 border-b border-border bg-surface flex items-center gap-2 text-[11px] text-muted">
+          <span className="flex gap-1">
+            <span className="w-2 h-2 rounded-full bg-[#ff5f56]" />
+            <span className="w-2 h-2 rounded-full bg-[#ffbd2e]" />
+            <span className="w-2 h-2 rounded-full bg-[#27c93f]" />
+          </span>
+          <span className="font-mono ml-1">app.payablepilot.com</span>
+          <span className="ml-auto inline-flex items-center gap-1 text-emerald-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            Connected
+          </span>
+        </div>
+
+        {/* Inbox row */}
+        <div className="px-5 py-4 border-b border-border bg-background">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-md bg-rose-50 text-rose-600 grid place-items-center shrink-0">
+              <Mail className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-[12px]">
+                <span className="font-medium text-foreground truncate">Summit Plumbing</span>
+                <span className="text-muted">·</span>
+                <span className="text-muted truncate">billing@summitplumb.co</span>
+                <span className="ml-auto text-muted shrink-0">9:14 AM</span>
+              </div>
+              <div className="mt-0.5 text-[13px] font-medium text-foreground">
+                Invoice SP-4821 · $4,820.00 due
+              </div>
+              <div className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full bg-brand-soft text-brand">
+                <Sparkles className="w-3 h-3" />
+                Extracting fields…
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Extracted card */}
+        <div className="px-5 py-4 bg-surface border-b border-border">
+          <div className="text-[10.5px] uppercase tracking-wider text-muted font-semibold">
+            Extracted &amp; matched
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
+            <ExtractedField label="Vendor" value="Summit Plumbing" matched />
+            <ExtractedField label="Invoice #" value="SP-4821" />
+            <ExtractedField label="Amount" value="$4,820.00" />
+            <ExtractedField label="Project" value="Cedar Ave · Phase 2" matched />
+            <ExtractedField label="Due date" value="Apr 28, 2026" />
+            <ExtractedField label="GL account" value="6020 · Plumbing" matched />
+          </div>
+        </div>
+
+        {/* Post action */}
+        <div className="px-5 py-3 flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11.5px] font-medium">
+            <Check className="w-3 h-3" />
+            Ready to post
+          </span>
+          <span className="text-[11.5px] text-muted">No discrepancies.</span>
+          <span className="ml-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-foreground text-background text-[12px] font-medium">
+            Post to QuickBooks
+            <ArrowRight className="w-3.5 h-3.5" />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExtractedField({
+  label,
+  value,
+  matched,
+}: {
+  label: string;
+  value: string;
+  matched?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10.5px] uppercase tracking-wider text-muted">{label}</div>
+      <div className="mt-0.5 flex items-center gap-1.5 text-foreground font-medium truncate">
+        {value}
+        {matched && <Check className="w-3 h-3 text-emerald-600 shrink-0" />}
+      </div>
+    </div>
   );
 }
 
@@ -133,29 +245,29 @@ function Hero() {
 
 function HowItWorks() {
   return (
-    <section id="how" className="px-6 py-24 bg-surface border-y border-border">
+    <section id="how" className="px-6 py-20 bg-background">
       <div className="max-w-[1180px] mx-auto">
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-wider text-muted">How it works</div>
-          <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            Three steps. Per client. No data entry.
+          <h2 className="mt-1 text-[36px] sm:text-[40px] leading-[1.1] font-semibold tracking-tight">
+            Three steps. No data entry.
           </h2>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-10">
           <Step
             num="01"
-            title="Add a client business"
-            body="Five-minute onboarding. Connect their AP Gmail mailbox and their QuickBooks Online. Each client lives in its own workspace, with row-level isolation."
+            title="Connect your books"
+            body="Five-minute setup. Connect Gmail and QuickBooks. Add more workspaces any time — each one is fully isolated."
           />
           <Step
             num="02"
             title="We read every invoice"
-            body="Invoices arriving in the connected mailbox are extracted automatically — vendor, amount, line items, project ref — and matched against the client's existing QBO vendors."
+            body="As invoices arrive, fields are extracted — vendor, amount, line items, project — and matched against your existing QuickBooks vendors automatically."
           />
           <Step
             num="03"
             title="You approve and post"
-            body="Bills queue in your inbox tab. One click posts them to QuickBooks. Switch between clients from the workspace menu — same workflow, different books."
+            body="Bills queue in your inbox. One click pushes them to QuickBooks. Posting only happens with your explicit approval."
           />
         </div>
       </div>
@@ -179,16 +291,16 @@ function InteractiveTour() {
   const [open, setOpen] = useState(false);
   const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
-    <section id="tour" className="px-6 py-24 bg-background">
+    <section id="tour" className="px-6 py-20 bg-surface border-y border-border">
       <div className="max-w-[1180px] mx-auto">
         <div className="max-w-2xl">
           <div className="text-xs uppercase tracking-wider text-muted">Interactive tour</div>
-          <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
-            See a day in the life of an AP bookkeeper.
+          <h2 className="mt-1 text-[36px] sm:text-[40px] leading-[1.1] font-semibold tracking-tight">
+            See a full day, in two minutes.
           </h2>
-          <p className="mt-4 text-[16px] leading-[1.65] text-muted">
-            Click through a full session: invoices arriving, fields extracted, bills queued, posted to
-            QuickBooks. Step through at your own pace, no signup needed.
+          <p className="mt-3 text-[16px] leading-[1.6] text-muted">
+            Click through a real session: invoices arriving, fields extracted, bills queued, posted to
+            QuickBooks. No signup needed.
           </p>
         </div>
 
@@ -381,11 +493,11 @@ function TourModal({ onClose }: { onClose: () => void }) {
 
 function TrustSafe() {
   return (
-    <section id="safety" className="px-6 py-24 bg-surface border-y border-border">
+    <section id="safety" className="px-6 py-20 bg-surface border-y border-border">
       <div className="max-w-[1180px] mx-auto">
         <div className="max-w-2xl">
-          <div className="text-xs uppercase tracking-wider text-muted">Your clients' books are safe</div>
-          <h2 className="mt-1 text-[40px] leading-[1.1] font-semibold tracking-tight">
+          <div className="text-xs uppercase tracking-wider text-muted">Built for the books</div>
+          <h2 className="mt-1 text-[36px] sm:text-[40px] leading-[1.1] font-semibold tracking-tight">
             You approve every bill before it posts.
           </h2>
         </div>
@@ -393,17 +505,17 @@ function TrustSafe() {
           <TrustCard
             icon={<Lock className="w-4 h-4" />}
             title="Never touches the bank"
-            body="PayablePilot prepares bills inside QuickBooks. Payment execution stays in your client's hands."
+            body="PayablePilot prepares bills inside QuickBooks. Payment execution stays in your hands."
           />
           <TrustCard
             icon={<ShieldCheck className="w-4 h-4" />}
-            title="Per-client isolation"
-            body="Every business is scoped by Postgres row-level security. One client never sees another's data."
+            title="Isolated workspaces"
+            body="Each set of books is a separate workspace, scoped at the database level. No cross-talk between them."
           />
           <TrustCard
             icon={<FileText className="w-4 h-4" />}
             title="Full audit trail"
-            body="Every connection, extraction, and post is logged. Useful for diligence, indispensable for accountants."
+            body="Every connection, extraction, and post is logged. Indispensable for accountants and diligence."
           />
         </div>
       </div>
@@ -426,7 +538,7 @@ function TrustCard({ icon, title, body }: { icon: React.ReactNode; title: string
 function FinalCta() {
   const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
-    <section id="cta" className="px-6 py-24 bg-foreground text-background">
+    <section id="cta" className="px-6 py-20 bg-foreground text-background">
       <div className="max-w-[920px] mx-auto text-center">
         <h2 className="text-[44px] leading-[1.1] font-semibold tracking-tight">
           Onboard your first client this week.
