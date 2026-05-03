@@ -19,12 +19,13 @@ import {
 import { PilotMark } from "./pilot-mark";
 
 export function LandingPage() {
+  const [demoOpen, setDemoOpen] = useState(false);
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <TopNav />
-      <Hero />
+      <TopNav onLaunchDemo={() => setDemoOpen(true)} />
+      <Hero onLaunchDemo={() => setDemoOpen(true)} />
       <HowItWorks />
-      <InteractiveDemo />
+      <InteractiveDemo open={demoOpen} setOpen={setDemoOpen} />
       <TrustSafe />
       <FinalCta />
       <Footer />
@@ -34,11 +35,13 @@ export function LandingPage() {
 
 // -------- Top nav --------
 
-function TopNav() {
+function TopNav({ onLaunchDemo }: { onLaunchDemo: () => void }) {
   // App lives on a separate subdomain in prod (app.payablepilot.com). In dev
   // the env var is unset and we fall back to relative paths on the same host.
   const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   const signInHref = `${appBase}/sign-in`;
+  // Reserved for future use; suppress lint about unused param in dev.
+  void onLaunchDemo;
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-[1180px] mx-auto px-6 h-16 flex items-center">
@@ -76,7 +79,7 @@ function TopNav() {
 
 // -------- Hero --------
 
-function Hero() {
+function Hero({ onLaunchDemo }: { onLaunchDemo: () => void }) {
   const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
   return (
     <section className="pt-14 pb-20 px-6">
@@ -100,13 +103,14 @@ function Hero() {
               Get started free
               <ArrowRight className="w-4 h-4" />
             </a>
-            <a
-              href="#demo"
+            <button
+              type="button"
+              onClick={onLaunchDemo}
               className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
             >
               <PlayCircle className="w-4 h-4" />
               Launch interactive demo
-            </a>
+            </button>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-muted">
@@ -359,13 +363,20 @@ const DEMO_SCENES = [
   { id: "connect", title: "Connect your books" },
   { id: "arrives", title: "Invoice arrives" },
   { id: "extracted", title: "Extracted & matched" },
+  { id: "project", title: "Project auto-matched" },
+  { id: "duplicate", title: "Duplicate caught" },
   { id: "posted", title: "Posted to QuickBooks" },
   { id: "switch", title: "Manage many businesses" },
   { id: "outro", title: "You're ready" },
 ];
 
-function InteractiveDemo() {
-  const [open, setOpen] = useState(false);
+function InteractiveDemo({
+  open,
+  setOpen,
+}: {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
   return (
     <section id="demo" className="px-6 py-20 bg-background">
       <div className="max-w-[1180px] mx-auto text-center">
@@ -374,8 +385,8 @@ function InteractiveDemo() {
           Drive the product yourself.
         </h2>
         <p className="mt-3 text-[16px] leading-[1.65] text-muted max-w-[560px] mx-auto">
-          Step through a real session at your own pace — connect, capture, extract, post. No signup, no setup,
-          no scripted demo guide.
+          Step through a real session at your own pace — connect, capture, extract, match a project, catch a
+          duplicate, post. No signup, no setup, no scripted guide.
         </p>
         <button
           onClick={() => setOpen(true)}
@@ -464,6 +475,8 @@ function DemoModal({ onClose }: { onClose: () => void }) {
               {scene.id === "connect" && <DemoConnect />}
               {scene.id === "arrives" && <DemoFrame><SceneArrives /></DemoFrame>}
               {scene.id === "extracted" && <DemoFrame><SceneExtracted /></DemoFrame>}
+              {scene.id === "project" && <DemoProjectMatch />}
+              {scene.id === "duplicate" && <DemoDuplicate />}
               {scene.id === "posted" && <DemoFrame><ScenePosted /></DemoFrame>}
               {scene.id === "switch" && <DemoSwitch />}
               {scene.id === "outro" && <DemoOutro onClose={onClose} />}
@@ -658,6 +671,181 @@ function SwitchRow({ name, hint, active }: { name: string; hint: string; active?
       <span className="flex-1 font-medium text-foreground truncate">{name}</span>
       <span className="text-[11.5px] text-muted truncate">{hint}</span>
       {active && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+    </div>
+  );
+}
+
+function DemoProjectMatch() {
+  return (
+    <DemoFrame>
+      <div className="text-[10.5px] uppercase tracking-wider text-muted font-semibold">
+        QuickBooks Projects
+      </div>
+      <div className="mt-1 text-[18px] font-semibold tracking-tight">
+        Matched the project — and created the next one.
+      </div>
+      <p className="mt-1 text-[13px] text-muted">
+        We extract the project name from the invoice, look it up in QuickBooks Projects, and use it. If it's a
+        new project, we create it under the right parent customer automatically.
+      </p>
+
+      <div className="mt-4 space-y-3">
+        <ProjectRow
+          source="Cedar Ave · Phase 2"
+          status="matched"
+          target="Cedar Ave · Phase 2"
+          parent="Greenfield PM"
+          note="Found in QuickBooks Projects"
+        />
+        <ProjectRow
+          source="Birch St · Renovation"
+          status="created"
+          target="Birch St · Renovation"
+          parent="Greenfield PM"
+          note="Auto-created — first invoice for this project"
+        />
+      </div>
+    </DemoFrame>
+  );
+}
+
+function ProjectRow({
+  source,
+  status,
+  target,
+  parent,
+  note,
+}: {
+  source: string;
+  status: "matched" | "created";
+  target: string;
+  parent: string;
+  note: string;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-3">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-md bg-background border border-border grid place-items-center shrink-0">
+          {status === "matched" ? (
+            <Check className="w-4 h-4 text-emerald-600" />
+          ) : (
+            <Sparkles className="w-4 h-4 text-brand" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-[12px] text-muted">
+            <span className="font-mono">"{source}"</span>
+            <ArrowRight className="w-3 h-3" />
+            <span className="font-medium text-foreground">{target}</span>
+            <span className="text-muted">·</span>
+            <span className="text-muted">parent: {parent}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            {status === "matched" ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Check className="w-3 h-3" />
+                Matched
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-brand-soft text-brand">
+                <Sparkles className="w-3 h-3" />
+                Auto-created
+              </span>
+            )}
+            <span className="text-[11.5px] text-muted">{note}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DemoDuplicate() {
+  return (
+    <DemoFrame>
+      <div className="text-[10.5px] uppercase tracking-wider text-muted font-semibold">
+        Duplicate detection
+      </div>
+      <div className="mt-1 text-[18px] font-semibold tracking-tight">
+        We caught one before it posted twice.
+      </div>
+      <p className="mt-1 text-[13px] text-muted">
+        On every invoice we check QuickBooks for a bill on the same vendor with the same invoice number.
+        Matches are flagged for review — never silently dropped, never silently re-posted.
+      </p>
+
+      <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 items-stretch">
+        <BillCard
+          tone="incoming"
+          tag="Just arrived"
+          vendor="Summit Plumbing"
+          invoice="SP-4821"
+          amount="$4,820.00"
+          date="Apr 18, 2026"
+        />
+        <div className="grid place-items-center text-muted text-[13px] sm:px-2">
+          <div className="flex flex-col items-center gap-1">
+            <ArrowRight className="w-4 h-4 hidden md:block" />
+            <span className="font-medium text-rose-700">DUPLICATE</span>
+          </div>
+        </div>
+        <BillCard
+          tone="existing"
+          tag="Already in QuickBooks"
+          vendor="Summit Plumbing"
+          invoice="SP-4821"
+          amount="$4,820.00"
+          date="Apr 18, 2026"
+          extra="QBO Bill ID: 1024 · Posted Apr 18, 9:15 AM"
+        />
+      </div>
+
+      <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-900 flex items-start gap-2">
+        <PilotMark className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+        <div>
+          <span className="font-semibold">Held for your review.</span> The new email won't post until you
+          confirm — usually it's a vendor re-send. One click to dismiss, one to override and post anyway.
+        </div>
+      </div>
+    </DemoFrame>
+  );
+}
+
+function BillCard({
+  tone,
+  tag,
+  vendor,
+  invoice,
+  amount,
+  date,
+  extra,
+}: {
+  tone: "incoming" | "existing";
+  tag: string;
+  vendor: string;
+  invoice: string;
+  amount: string;
+  date: string;
+  extra?: string;
+}) {
+  const palette =
+    tone === "incoming"
+      ? "border-brand/40 bg-brand-soft/30"
+      : "border-border bg-surface";
+  return (
+    <div className={`rounded-lg border ${palette} p-3`}>
+      <div className="text-[10.5px] uppercase tracking-wider text-muted font-semibold">{tag}</div>
+      <div className="mt-1 text-[14px] font-semibold tracking-tight">{vendor}</div>
+      <div className="mt-1 text-[12.5px] text-muted">
+        Invoice <span className="font-mono text-foreground">{invoice}</span>
+      </div>
+      <div className="text-[12.5px] text-muted">
+        Amount <span className="text-foreground font-medium tabular-nums">{amount}</span>
+      </div>
+      <div className="text-[12.5px] text-muted">
+        Date <span className="text-foreground">{date}</span>
+      </div>
+      {extra && <div className="mt-2 text-[11px] text-muted font-mono">{extra}</div>}
     </div>
   );
 }
