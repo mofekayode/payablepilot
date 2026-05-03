@@ -93,16 +93,14 @@ function Hero() {
   return (
     <section className="pt-16 pb-12 px-6">
       <div className="max-w-[1180px] mx-auto">
-        <div className="text-xs uppercase tracking-[0.18em] font-medium text-muted">For bookkeeping firms</div>
-        <h1 className="mt-3 text-[56px] leading-[1.05] font-semibold tracking-tight max-w-[880px]">
-          AP automation,
+        <h1 className="text-[56px] leading-[1.05] font-semibold tracking-tight max-w-[880px]">
+          Stop typing invoices
           <br />
-          one mailbox per client.
+          into QuickBooks.
         </h1>
         <p className="mt-5 text-[18px] leading-[1.6] text-muted max-w-[720px]">
-          Onboard each client in five minutes. Connect their Gmail and their QuickBooks, and PayablePilot
-          reads every invoice that arrives, extracts the fields, and queues the bill for your approval.
-          One bookkeeper, many clients, zero data entry.
+          PayablePilot reads every invoice that lands in your inbox, extracts the fields, and queues the bill
+          for your approval. One click and it's posted. Connect as many sets of books as you need.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -111,13 +109,13 @@ function Hero() {
             className="inline-flex items-center gap-2 h-11 px-5 rounded-md bg-brand text-white text-sm font-medium hover:bg-[color-mix(in_oklab,var(--brand)_88%,black)]"
           >
             <PlayCircle className="w-4 h-4" />
-            See the interactive tour
+            See it in action
           </a>
           <a
             href={`${appBase}/sign-up`}
             className="inline-flex items-center gap-2 h-11 px-5 rounded-md border border-border bg-background text-sm font-medium hover:bg-surface"
           >
-            Get started
+            Get started free
             <ArrowRight className="w-4 h-4" />
           </a>
         </div>
