@@ -82,11 +82,14 @@ export function BillsView({
           table: "inbox_messages",
           filter: `business_id=eq.${activeBusinessId}`,
         },
-        () => {
+        (payload) => {
+          console.log("[bills] realtime event", payload.eventType, payload.new);
           hydrateFromDb().then(() => setItems(loadCaptured()));
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log("[bills] realtime status:", status, err ?? "");
+      });
     return () => {
       supabase.removeChannel(channel);
     };

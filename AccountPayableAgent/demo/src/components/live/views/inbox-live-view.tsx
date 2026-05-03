@@ -120,11 +120,14 @@ export function InboxLiveView({
           table: "inbox_messages",
           filter: `business_id=eq.${activeBusinessId}`,
         },
-        () => {
+        (payload) => {
+          console.log("[inbox] realtime event", payload.eventType, payload.new);
           fetchInbox({ silent: true });
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        console.log("[inbox] realtime status:", status, err ?? "");
+      });
 
     return () => {
       supabase.removeChannel(channel);
