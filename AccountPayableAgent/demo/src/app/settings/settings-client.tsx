@@ -2,7 +2,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, BookOpen, ArrowLeft, Check, X, Loader2, ExternalLink, Zap, Bell, Inbox, Send, ShieldCheck } from "lucide-react";
+import {
+  Mail,
+  BookOpen,
+  ArrowLeft,
+  Check,
+  X,
+  Loader2,
+  Zap,
+  Bell,
+  Inbox,
+  Send,
+  ShieldCheck,
+  Building2,
+  Copy,
+  Forward,
+  Plus,
+} from "lucide-react";
 import { PilotMark } from "@/components/pilot-mark";
 import {
   AutomationKey,
@@ -12,6 +28,8 @@ import {
   loadAutomation,
   saveAutomation,
 } from "@/lib/automation-settings";
+import type { Business } from "@/lib/supabase/types";
+import { InviteSection } from "./invite-section";
 
 type Flash = { gmail: string | null; qbo: string | null; reason: string | null };
 
@@ -19,10 +37,18 @@ export function SettingsClient({
   gmailConnected,
   qboConnected,
   flash,
+  business,
+  inboxAddress,
+  businesses,
+  origin,
 }: {
   gmailConnected: boolean;
   qboConnected: boolean;
   flash: Flash;
+  business: Business;
+  inboxAddress: string;
+  businesses: Business[];
+  origin: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"gmail" | "qbo" | null>(null);
@@ -62,7 +88,7 @@ export function SettingsClient({
       <header className="bg-white border-b border-neutral-200">
         <div className="max-w-[920px] mx-auto px-6 py-4 flex items-center gap-3">
           <Link href="/app" className="text-neutral-500 hover:text-neutral-900 text-sm flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" /> Back to app
+            <ArrowLeft className="w-4 h-4" /> Back to workspace
           </Link>
           <div className="ml-auto flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-md bg-neutral-900 text-white grid place-items-center">
@@ -75,42 +101,50 @@ export function SettingsClient({
 
       <main className="max-w-[920px] mx-auto px-6 py-10 space-y-10">
         <div>
-          <h1 className="text-[28px] font-semibold tracking-tight">Settings</h1>
+          <div className="text-[12px] uppercase tracking-wider text-neutral-500 font-medium">
+            Settings for
+          </div>
+          <h1 className="mt-0.5 text-[28px] font-semibold tracking-tight flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-neutral-700" />
+            {business.name}
+          </h1>
           <p className="mt-1 text-neutral-500 text-sm max-w-prose">
-            Connect your AP inbox and your books, then decide which actions PayablePilot should take on its own and
-            which should wait for your approval.
+            Manage this client's integrations, forwarding address, and automation. Switch businesses from the
+            workspace menu in the top bar.
           </p>
         </div>
 
         <FlashBanner flash={flash} />
 
+        <BusinessProfileSection business={business} />
+
+        <ForwardingSection inboxAddress={inboxAddress} businessName={business.name} />
+
         <section className="space-y-4">
           <SectionHeader title="Integrations" subtitle="Where invoices come from and where bills get posted." />
           <IntegrationCard
             name="Gmail"
-            description="Read new invoice emails from your AP mailbox. Read-only — we never send or modify mail."
+            description="Read invoice emails from this client's AP mailbox. Read-only — we never send or modify mail."
             icon={<Mail className="w-5 h-5 text-rose-600" />}
             connected={gmailConnected}
             connectHref="/api/integrations/gmail/auth"
             onDisconnect={() => disconnect("gmail")}
             busy={busy === "gmail"}
-            requiredEnv={["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI"]}
-            consoleHref="https://console.cloud.google.com/apis/credentials"
-            consoleLabel="Google Cloud · OAuth credentials"
           />
           <IntegrationCard
             name="QuickBooks Online"
-            description="Post matched bills, sync vendors and chart of accounts. You release the actual payment from inside QuickBooks."
+            description="Post matched bills, sync vendors, and code expenses. You release payments inside QuickBooks."
             icon={<BookOpen className="w-5 h-5 text-emerald-600" />}
             connected={qboConnected}
             connectHref="/api/integrations/qbo/auth"
             onDisconnect={() => disconnect("qbo")}
             busy={busy === "qbo"}
-            requiredEnv={["QBO_CLIENT_ID", "QBO_CLIENT_SECRET", "QBO_REDIRECT_URI", "QBO_ENV"]}
-            consoleHref="https://developer.intuit.com/app/developer/dashboard"
-            consoleLabel="Intuit Developer · Apps"
           />
         </section>
+
+        <InviteSection origin={origin} />
+
+        <TeamSection businesses={businesses} />
 
         <section className="space-y-4">
           <div className="flex items-end justify-between gap-3 flex-wrap">
@@ -204,29 +238,122 @@ export function SettingsClient({
             </div>
           </AutomationGroup>
         </section>
-
-        <div className="bg-white rounded-xl border border-neutral-200 p-5 text-sm text-neutral-600 leading-relaxed">
-          <div className="font-medium text-neutral-900 mb-2">Setup notes</div>
-          <ul className="list-disc pl-5 space-y-1.5">
-            <li>
-              See <code className="font-mono text-[12.5px] px-1 py-0.5 bg-neutral-100 rounded">.env.example</code> for
-              the required environment variables.
-            </li>
-            <li>
-              Tokens are stored in HTTP-only cookies for this demo. Production deployments should persist tokens in a
-              database keyed by user/org.
-            </li>
-            <li>
-              Set the redirect URIs in each provider's developer console to point at{" "}
-              <code className="font-mono text-[12.5px] px-1 py-0.5 bg-neutral-100 rounded">
-                /api/integrations/&lt;provider&gt;/callback
-              </code>{" "}
-              on this app's hostname.
-            </li>
-          </ul>
-        </div>
       </main>
     </div>
+  );
+}
+
+function BusinessProfileSection({ business }: { business: Business }) {
+  return (
+    <section className="space-y-3">
+      <SectionHeader title="Business profile" subtitle="Used to match incoming invoices to the right client." />
+      <div className="bg-white rounded-xl border border-neutral-200 p-5 grid gap-4 sm:grid-cols-2">
+        <Field label="Display name" value={business.name} />
+        <Field label="Legal name" value={business.legal_name || "—"} />
+        <Field label="DBA" value={business.dba || "—"} />
+        <Field label="EIN" value={business.ein || "—"} />
+      </div>
+    </section>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11.5px] uppercase tracking-wider text-neutral-500 font-medium">{label}</div>
+      <div className="mt-0.5 text-[14px] text-neutral-900">{value}</div>
+    </div>
+  );
+}
+
+function ForwardingSection({ inboxAddress, businessName }: { inboxAddress: string; businessName: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(inboxAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
+  return (
+    <section className="space-y-3">
+      <SectionHeader
+        title="Forwarding address"
+        subtitle="A unique address invoices can be forwarded to — auto-routed to this business."
+      />
+      <div className="bg-white rounded-xl border border-neutral-200 p-5">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-neutral-50 border border-neutral-200 grid place-items-center shrink-0">
+            <Forward className="w-5 h-5 text-neutral-700" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="text-[15px] font-semibold text-neutral-900">Inbound mailbox for {businessName}</div>
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                Coming soon
+              </span>
+            </div>
+            <p className="mt-1 text-[13px] text-neutral-500 leading-relaxed">
+              Once we plug in inbound mail, anything forwarded to this address will be auto-matched to{" "}
+              {businessName}. For now, connect the client's Gmail above and we'll read invoices directly from
+              their existing AP inbox.
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <code className="font-mono text-[13px] px-2.5 py-1.5 bg-neutral-100 text-neutral-800 rounded border border-neutral-200 break-all">
+                {inboxAddress}
+              </code>
+              <button
+                onClick={copy}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-neutral-300 text-neutral-700 text-[12.5px] font-medium hover:bg-neutral-50"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TeamSection({ businesses }: { businesses: Business[] }) {
+  return (
+    <section className="space-y-3">
+      <SectionHeader
+        title="Your businesses"
+        subtitle="Manage other clients you've onboarded, or add a new one."
+      />
+      <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+        {businesses.map((b, i) => (
+          <div
+            key={b.id}
+            className={
+              "flex items-center gap-3 px-4 py-3 " +
+              (i < businesses.length - 1 ? "border-b border-neutral-100" : "")
+            }
+          >
+            <span className="w-7 h-7 rounded-md bg-neutral-100 grid place-items-center shrink-0">
+              <Building2 className="w-4 h-4 text-neutral-600" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[14px] font-medium text-neutral-900 truncate">{b.name}</div>
+              {b.legal_name && (
+                <div className="text-[12px] text-neutral-500 truncate">{b.legal_name}</div>
+              )}
+            </div>
+          </div>
+        ))}
+        <Link
+          href="/onboarding/business"
+          className="flex items-center gap-2 px-4 py-3 border-t border-neutral-100 text-[13.5px] text-neutral-700 hover:bg-neutral-50"
+        >
+          <Plus className="w-4 h-4" /> Add a business
+        </Link>
+      </div>
+    </section>
   );
 }
 
@@ -265,9 +392,6 @@ function IntegrationCard({
   connectHref,
   onDisconnect,
   busy,
-  requiredEnv,
-  consoleHref,
-  consoleLabel,
 }: {
   name: string;
   description: string;
@@ -276,9 +400,6 @@ function IntegrationCard({
   connectHref: string;
   onDisconnect: () => void;
   busy: boolean;
-  requiredEnv: string[];
-  consoleHref: string;
-  consoleLabel: string;
 }) {
   return (
     <div className="bg-white rounded-xl border border-neutral-200 p-5">
@@ -300,21 +421,6 @@ function IntegrationCard({
             )}
           </div>
           <p className="mt-1 text-[13.5px] text-neutral-600 leading-relaxed">{description}</p>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {requiredEnv.map((v) => (
-              <code key={v} className="font-mono text-[11.5px] px-1.5 py-0.5 bg-neutral-100 text-neutral-700 rounded">
-                {v}
-              </code>
-            ))}
-          </div>
-          <a
-            href={consoleHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 inline-flex items-center gap-1 text-[12.5px] text-neutral-500 hover:text-neutral-900"
-          >
-            {consoleLabel} <ExternalLink className="w-3 h-3" />
-          </a>
         </div>
         <div className="shrink-0">
           {connected ? (
@@ -421,96 +527,22 @@ function ToggleRow({
       }
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[13.5px] font-medium text-neutral-800">{label}</span>
+        <div className="text-[13.5px] font-medium text-neutral-900 flex items-center gap-2">
+          {label}
           {safe && (
-            <span className="text-[10.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Safe to keep on
+            <span className="inline-flex items-center gap-1 text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">
+              <Zap className="w-2.5 h-2.5" /> Safe
             </span>
           )}
           {danger && (
-            <span className="text-[10.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-              Skips your approval
+            <span className="inline-flex items-center gap-1 text-[10.5px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800">
+              Careful
             </span>
           )}
         </div>
         {help && <div className="mt-0.5 text-[12px] text-neutral-500">{help}</div>}
       </div>
       <Toggle value={value} onChange={onChange} />
-    </div>
-  );
-}
-
-function WorkflowStyleCard({
-  value,
-  onChange,
-}: {
-  value: WorkflowStyle;
-  onChange: (v: WorkflowStyle) => void;
-}) {
-  const options: Array<{ key: WorkflowStyle; title: string; tag?: string; body: string }> = [
-    {
-      key: "strict",
-      title: "Strict",
-      tag: "POs required",
-      body: "Every invoice must match an approved PO and signed receiving doc before it can post. Best for property managers, larger ops with formal procurement.",
-    },
-    {
-      key: "standard",
-      title: "Standard",
-      tag: "POs optional",
-      body: "Match against a PO when one exists, otherwise post the bill directly. Good fit for most SMBs and trades shops that use POs only on big jobs.",
-    },
-    {
-      key: "bills_only",
-      title: "Bills only",
-      tag: "No matching",
-      body: "Skip the matching step entirely. Captured invoices flow straight to 'ready to post' for your approval. Best for service businesses (HVAC, contractors, cleaners) without formal POs.",
-    },
-  ];
-
-  return (
-    <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-neutral-100 flex items-center gap-2 text-[12.5px] uppercase tracking-wider text-neutral-500 font-medium">
-        <Inbox className="w-4 h-4 text-neutral-400" />
-        Workflow style
-      </div>
-      <div className="p-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-        {options.map((o) => {
-          const selected = o.key === value;
-          return (
-            <button
-              key={o.key}
-              type="button"
-              onClick={() => onChange(o.key)}
-              className={
-                "text-left p-4 rounded-lg border transition-colors " +
-                (selected
-                  ? "border-neutral-900 bg-neutral-50 ring-1 ring-neutral-900"
-                  : "border-neutral-200 bg-white hover:border-neutral-400 hover:bg-neutral-50")
-              }
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[14px] font-semibold tracking-tight">{o.title}</span>
-                {o.tag && (
-                  <span
-                    className={
-                      "text-[10.5px] uppercase tracking-wider px-1.5 py-0.5 rounded border " +
-                      (selected
-                        ? "bg-neutral-900 text-white border-neutral-900"
-                        : "bg-neutral-50 text-neutral-600 border-neutral-200")
-                    }
-                  >
-                    {o.tag}
-                  </span>
-                )}
-                {selected && <Check className="w-4 h-4 text-neutral-900 ml-auto" />}
-              </div>
-              <div className="mt-2 text-[12.5px] text-neutral-600 leading-relaxed">{o.body}</div>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -523,16 +555,49 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       aria-checked={value}
       onClick={() => onChange(!value)}
       className={
-        "relative shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors " +
+        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 " +
         (value ? "bg-neutral-900" : "bg-neutral-300")
       }
     >
       <span
         className={
-          "inline-block h-5 w-5 transform rounded-full bg-white transition-transform shadow-sm " +
-          (value ? "translate-x-[22px]" : "translate-x-[2px]")
+          "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform " +
+          (value ? "translate-x-5" : "translate-x-1")
         }
       />
     </button>
+  );
+}
+
+function WorkflowStyleCard({ value, onChange }: { value: WorkflowStyle; onChange: (v: WorkflowStyle) => void }) {
+  const options: { value: WorkflowStyle; title: string; desc: string }[] = [
+    { value: "strict", title: "Strict", desc: "POs required. Full 3-way match before any bill posts." },
+    { value: "standard", title: "Standard", desc: "POs optional. Match when provided, otherwise post directly." },
+    { value: "bills_only", title: "Bills only", desc: "Skip matching entirely. Captured invoices flow to 'ready to post'." },
+  ];
+  return (
+    <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-neutral-100 flex items-center gap-2 text-[12.5px] uppercase tracking-wider text-neutral-500 font-medium">
+        Workflow style
+      </div>
+      <div className="grid sm:grid-cols-3">
+        {options.map((opt, i) => (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            className={
+              "text-left p-4 transition-colors " +
+              (i < options.length - 1 ? "sm:border-r border-neutral-100 " : "") +
+              (value === opt.value ? "bg-neutral-900 text-white" : "hover:bg-neutral-50")
+            }
+          >
+            <div className="text-[13.5px] font-semibold">{opt.title}</div>
+            <div className={"mt-0.5 text-[12px] " + (value === opt.value ? "text-neutral-300" : "text-neutral-500")}>
+              {opt.desc}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }

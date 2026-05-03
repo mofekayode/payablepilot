@@ -2,19 +2,24 @@
 import Link from "next/link";
 import { Settings as SettingsIcon, Mail, BookOpen, AlertCircle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WorkspaceSwitcher } from "./workspace-switcher";
+import type { Business } from "@/lib/supabase/types";
 
 export function TopbarLive({
   gmailConnected,
   qboConnected,
+  activeBusiness,
+  businesses,
 }: {
   gmailConnected: boolean;
   qboConnected: boolean;
+  activeBusiness: Business | null;
+  businesses: Business[];
 }) {
   return (
-    <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-background">
-      <div className="flex items-center gap-3 min-w-0">
-        <span className="text-[12px] uppercase tracking-wider text-muted font-medium">Workspace</span>
-        <span className="text-[13.5px] font-medium truncate">My account</span>
+    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background">
+      <div className="flex items-center gap-2 min-w-0">
+        <WorkspaceSwitcher businesses={businesses} active={activeBusiness} />
       </div>
       <div className="flex items-center gap-3 text-sm">
         <ConnectionBadge label="Gmail" connected={gmailConnected} icon={<Mail className="w-3.5 h-3.5" />} />

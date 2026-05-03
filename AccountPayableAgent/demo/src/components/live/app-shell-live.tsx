@@ -7,6 +7,7 @@ import { InboxLiveView } from "./views/inbox-live-view";
 import { BillsView } from "./views/bills-view";
 import { VendorsView } from "./views/vendors-view";
 import { ProjectsView } from "./views/projects-view";
+import type { Business } from "@/lib/supabase/types";
 
 type ConnectionState = {
   gmail: boolean;
@@ -24,7 +25,13 @@ function readViewFromUrl(): LiveView {
   return "dashboard";
 }
 
-export function AppShellLive() {
+export function AppShellLive({
+  activeBusiness,
+  businesses,
+}: {
+  activeBusiness: Business | null;
+  businesses: Business[];
+}) {
   // Lazy init from the URL so a refresh on /app?view=bills lands on the same
   // tab. Default tab (dashboard) is left implicit so the URL stays clean at /app.
   const [view, setView] = useState<LiveView>(readViewFromUrl);
@@ -74,7 +81,12 @@ export function AppShellLive() {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-foreground">
-      <TopbarLive gmailConnected={conn.gmail} qboConnected={conn.qbo} />
+      <TopbarLive
+        gmailConnected={conn.gmail}
+        qboConnected={conn.qbo}
+        activeBusiness={activeBusiness}
+        businesses={businesses}
+      />
       <div className="flex-1 min-h-0 flex">
         <SidebarLive active={view} onSelect={navigate} />
         <main className="flex-1 min-w-0 overflow-hidden bg-surface">

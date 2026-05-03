@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Inbox as InboxIcon,
@@ -8,11 +9,12 @@ import {
   Users,
   Briefcase,
   Settings as SettingsIcon,
-  Film,
+  LogOut,
 } from "lucide-react";
 import { PilotMark } from "../pilot-mark";
 import { cn } from "@/lib/utils";
 import { loadCaptured } from "@/lib/captured-store";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type LiveView = "dashboard" | "inbox" | "bills" | "vendors" | "projects";
 
@@ -23,8 +25,18 @@ export function SidebarLive({
   active: LiveView;
   onSelect: (v: LiveView) => void;
 }) {
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
   // Track captured-invoice counts so the badges stay accurate as the user works.
   const [counts, setCounts] = useState({ extracted: 0, ready: 0 });
+
+  async function signOut() {
+    setSigningOut(true);
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/sign-in");
+    router.refresh();
+  }
 
   useEffect(() => {
     function refresh() {
@@ -49,50 +61,42 @@ export function SidebarLive({
         <div className="w-9 h-9 rounded-md bg-foreground text-background grid place-items-center">
           <PilotMark className="w-4 h-4" />
         </div>
-        <div>
-          <div className="text-[15px] font-semibold tracking-tight">PayablePilot</div>
-          <div className="text-[11px] text-muted">Live workspace</div>
-        </div>
+        <div className="text-[15px] font-semibold tracking-tight">PayablePilot</div>
       </div>
 
-      <nav className="flex-1 overflow-auto scrollbar-thin py-2">
-        <Group label="Workspace">
-          <NavItem
-            icon={<LayoutDashboard className="w-4 h-4" />}
-            label="Dashboard"
-            active={active === "dashboard"}
-            onClick={() => onSelect("dashboard")}
-          />
-          <NavItem
-            icon={<InboxIcon className="w-4 h-4" />}
-            label="Inbox"
-            badge={counts.extracted || undefined}
-            active={active === "inbox"}
-            onClick={() => onSelect("inbox")}
-          />
-          <NavItem
-            icon={<CreditCard className="w-4 h-4" />}
-            label="Bills to post"
-            badge={counts.ready || undefined}
-            active={active === "bills"}
-            onClick={() => onSelect("bills")}
-          />
-        </Group>
-
-        <Group label="QuickBooks">
-          <NavItem
-            icon={<Users className="w-4 h-4" />}
-            label="Vendors"
-            active={active === "vendors"}
-            onClick={() => onSelect("vendors")}
-          />
-          <NavItem
-            icon={<Briefcase className="w-4 h-4" />}
-            label="Projects"
-            active={active === "projects"}
-            onClick={() => onSelect("projects")}
-          />
-        </Group>
+      <nav className="flex-1 overflow-auto scrollbar-thin px-3 py-3 flex flex-col gap-0.5">
+        <NavItem
+          icon={<LayoutDashboard className="w-4 h-4" />}
+          label="Dashboard"
+          active={active === "dashboard"}
+          onClick={() => onSelect("dashboard")}
+        />
+        <NavItem
+          icon={<InboxIcon className="w-4 h-4" />}
+          label="Inbox"
+          badge={counts.extracted || undefined}
+          active={active === "inbox"}
+          onClick={() => onSelect("inbox")}
+        />
+        <NavItem
+          icon={<CreditCard className="w-4 h-4" />}
+          label="Bills to post"
+          badge={counts.ready || undefined}
+          active={active === "bills"}
+          onClick={() => onSelect("bills")}
+        />
+        <NavItem
+          icon={<Users className="w-4 h-4" />}
+          label="Vendors"
+          active={active === "vendors"}
+          onClick={() => onSelect("vendors")}
+        />
+        <NavItem
+          icon={<Briefcase className="w-4 h-4" />}
+          label="Projects"
+          active={active === "projects"}
+          onClick={() => onSelect("projects")}
+        />
       </nav>
 
       <div className="p-3 border-t border-border space-y-2">
@@ -103,24 +107,17 @@ export function SidebarLive({
           <SettingsIcon className="w-3.5 h-3.5" />
           Settings &amp; integrations
         </Link>
-        <Link
-          href="/demo"
-          className="flex items-center gap-2 text-xs text-muted hover:text-foreground px-3 py-2 rounded-md border border-border bg-surface"
+        <button
+          type="button"
+          onClick={signOut}
+          disabled={signingOut}
+          className="w-full flex items-center gap-2 text-xs text-muted hover:text-foreground px-3 py-2 rounded-md border border-border bg-surface disabled:opacity-50"
         >
-          <Film className="w-3.5 h-3.5" />
-          Open guided demo
-        </Link>
+          <LogOut className="w-3.5 h-3.5" />
+          {signingOut ? "Signing out…" : "Sign out"}
+        </button>
       </div>
     </aside>
-  );
-}
-
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="px-3 pt-3">
-      <div className="px-2 pb-1 text-[10px] uppercase tracking-[0.12em] text-muted font-semibold">{label}</div>
-      <div className="flex flex-col gap-0.5">{children}</div>
-    </div>
   );
 }
 

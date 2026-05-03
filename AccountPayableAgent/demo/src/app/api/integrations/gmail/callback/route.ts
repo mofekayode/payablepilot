@@ -1,26 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCode } from "@/lib/integrations/gmail";
-import { setTokens } from "@/lib/integrations/tokens";
+import { setTokensForBusiness } from "@/lib/integrations/tokens";
+import { appendFlash } from "@/lib/integrations/return-to";
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const expectedState = req.cookies.get("pp_gmail_state")?.value;
+  const businessId = req.cookies.get("pp_gmail_business")?.value;
+  const returnTo = req.cookies.get("pp_gmail_return")?.value || "/settings";
 
-  if (!code) return NextResponse.redirect(new URL("/settings?gmail=error&reason=missing_code", req.url));
-  if (!state || state !== expectedState) {
-    return NextResponse.redirect(new URL("/settings?gmail=error&reason=state_mismatch", req.url));
+  function back(params: Record<string, string>) {
+    const res = NextResponse.redirect(new URL(appendFlash(returnTo, params), req.url));
+    res.cookies.delete("pp_gmail_state");
+    res.cookies.delete("pp_gmail_business");
+    res.cookies.delete("pp_gmail_return");
+    return res;
   }
+
+  if (!code) return back({ gmail: "error", reason: "missing_code" });
+  if (!state || state !== expectedState) return back({ gmail: "error", reason: "state_mismatch" });
+  if (!businessId) return back({ gmail: "error", reason: "missing_business" });
 
   try {
     const tokens = await exchangeCode(code);
-    await setTokens("gmail", tokens);
-    const res = NextResponse.redirect(new URL("/settings?gmail=connected", req.url));
-    res.cookies.delete("pp_gmail_state");
-    return res;
+    await setTokensForBusiness(businessId, "gmail", tokens);
+    return back({ gmail: "connected" });
   } catch (e) {
-    const msg = encodeURIComponent((e as Error).message);
-    return NextResponse.redirect(new URL(`/settings?gmail=error&reason=${msg}`, req.url));
+    return back({ gmail: "error", reason: encodeURIComponent((e as Error).message) });
   }
 }
