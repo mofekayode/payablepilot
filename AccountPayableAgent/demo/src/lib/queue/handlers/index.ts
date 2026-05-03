@@ -3,6 +3,7 @@
 
 import type { JobPayloads, JobType } from "../types";
 import { processInboundEmail } from "./process-inbound-email";
+import { extractInvoiceFields } from "./extract-invoice-fields";
 
 export type HandlerCtx = { jobId: number; firmId: string; attempts: number };
 
@@ -21,4 +22,5 @@ type Handler<T extends JobType> = (
 
 export const handlers: { [T in JobType]: Handler<T> } = {
   process_inbound_email: processInboundEmail,
+  extract_invoice_fields: extractInvoiceFields,
 };

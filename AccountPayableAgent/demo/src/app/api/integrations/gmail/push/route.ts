@@ -171,14 +171,17 @@ export async function POST(req: NextRequest) {
     });
 
   // Inline-process the queue right after enqueueing so the just-arrived
-  // emails get routed in the same request (sub-second). The 15-min poller
-  // cron is the safety net — and so is the queue's own retry/backoff —
-  // but the happy path is event-driven end to end.
+  // emails get routed (and then extracted) in the same request. We make
+  // up to 3 passes because routing → extraction enqueues a follow-up
+  // job; capping at 3 keeps us safe from runaway loops.
   let processed = 0;
   if (inserted > 0) {
     try {
-      const r = await runQueueOnce({ batchSize: Math.max(inserted, 5) });
-      processed = r.processed;
+      for (let i = 0; i < 3; i++) {
+        const r = await runQueueOnce({ batchSize: Math.max(inserted, 5) });
+        processed += r.processed;
+        if (r.processed === 0) break;
+      }
     } catch (e) {
       console.error("[gmail-push] inline worker tick failed:", e);
     }

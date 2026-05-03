@@ -91,7 +91,9 @@ export function AppShellLive({
         <SidebarLive active={view} onSelect={navigate} />
         <main className="flex-1 min-w-0 overflow-hidden bg-surface">
           {view === "dashboard" && <DashboardView onNavigate={navigate} conn={conn} />}
-          {view === "inbox" && <InboxLiveView onNavigate={navigate} />}
+          {view === "inbox" && (
+            <InboxLiveView onNavigate={navigate} activeBusinessId={activeBusiness?.id ?? null} />
+          )}
           {view === "bills" && <BillsView onNavigate={navigate} />}
           {view === "vendors" && <VendorsView />}
           {view === "projects" && <ProjectsView />}

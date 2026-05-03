@@ -10,6 +10,7 @@
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { routeEmail, rememberSenderRoute } from "@/lib/routing/route-email";
+import { enqueue } from "../enqueue";
 import type { HandlerCtx, HandlerResult } from "./index";
 import type { JobPayloads } from "../types";
 
@@ -73,6 +74,19 @@ export async function processInboundEmail(
       } catch (e) {
         console.error("[process_inbound_email] rememberSenderRoute failed:", (e as Error).message);
       }
+    }
+
+    // Kick off field extraction for the routed message. Separate job so
+    // routing latency stays tight (sub-second) while extraction runs
+    // independently with its own retry budget.
+    try {
+      await enqueue({
+        firmId: ctx.firmId,
+        type: "extract_invoice_fields",
+        payload: { inboxMessageId: msg.id },
+      });
+    } catch (e) {
+      console.error("[process_inbound_email] enqueue extraction failed:", (e as Error).message);
     }
   } else {
     await markUnmatched(admin, msg.id, "no_match");

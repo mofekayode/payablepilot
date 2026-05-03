@@ -7,6 +7,9 @@ export type JobPayloads = {
   process_inbound_email: {
     inboxMessageId: string;
   };
+  extract_invoice_fields: {
+    inboxMessageId: string;
+  };
   // Reserved for future use:
   //   refresh_gmail_watch: { connectionId: string };
 };

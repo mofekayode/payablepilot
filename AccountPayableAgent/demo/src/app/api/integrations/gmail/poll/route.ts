@@ -21,15 +21,18 @@ async function handle(req: NextRequest) {
   try {
     const polled = await pollAllFirmMailboxes();
     // Drain whatever the poll just enqueued (and any older retries) in
-    // the same request, so the cron is also the worker tick.
-    let queue = { processed: 0, succeeded: 0, failed: 0 };
-    if (polled.newMessages > 0) {
-      queue = await runQueueOnce({ batchSize: Math.max(polled.newMessages, 5) });
-    } else {
-      // Even if no new mail, drain any stuck jobs.
-      queue = await runQueueOnce({ batchSize: 10 });
+    // the same request. Multi-pass so routing → extraction follow-up
+    // jobs also get processed in this run.
+    const totals = { processed: 0, succeeded: 0, failed: 0 };
+    const batchSize = polled.newMessages > 0 ? Math.max(polled.newMessages, 10) : 10;
+    for (let i = 0; i < 3; i++) {
+      const r = await runQueueOnce({ batchSize });
+      totals.processed += r.processed;
+      totals.succeeded += r.succeeded;
+      totals.failed += r.failed;
+      if (r.processed === 0) break;
     }
-    return NextResponse.json({ ok: true, ...polled, queue });
+    return NextResponse.json({ ok: true, ...polled, queue: totals });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }

@@ -32,7 +32,9 @@ export async function GET(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("inbox_messages")
-    .select("id, from_email, from_name, subject, received_at, routing_status, routing_confidence, parsed_json, source")
+    .select(
+      "id, from_email, from_name, subject, received_at, routing_status, routing_confidence, parsed_json, source, extracted_fields, extraction_status, extraction_error"
+    )
     .eq("business_id", businessId)
     .order("received_at", { ascending: false })
     .limit(limit);
@@ -56,6 +58,9 @@ export async function GET(req: NextRequest) {
         mimeType: a.mimeType ?? "application/octet-stream",
         size: a.size ?? 0,
       })),
+      extractedFields: row.extracted_fields ?? null,
+      extractionStatus: row.extraction_status ?? "pending",
+      extractionError: row.extraction_error ?? null,
     };
   });
 
