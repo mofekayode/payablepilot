@@ -47,23 +47,37 @@ export async function exchangeCode(code: string): Promise<StoredTokens> {
 }
 
 // Build an authed Gmail client, refreshing the access token if expired.
+// Used inside a request context (active business resolved from cookie).
 export async function getGmailClient(): Promise<gmail_v1.Gmail | null> {
   const stored = await getTokens("gmail");
   if (!stored) return null;
+  return buildGmailFromTokens(stored, async (refreshed) => {
+    await setTokens("gmail", refreshed);
+  });
+}
+
+// Background-safe variant: build a client from explicit tokens. The
+// `persist` callback is called with the refreshed token so the caller can
+// write it back wherever it lives (firm-level or business-level table).
+export async function buildGmailFromTokens(
+  stored: StoredTokens,
+  persist?: (refreshed: StoredTokens) => Promise<void>
+): Promise<gmail_v1.Gmail> {
   const oauth = createOAuthClient();
   oauth.setCredentials({
     access_token: stored.accessToken,
     refresh_token: stored.refreshToken,
     expiry_date: stored.expiresAt,
   });
-  // Auto-refresh: if the token is stale, get a new one and persist.
   if (stored.expiresAt && stored.expiresAt - 60_000 < Date.now() && stored.refreshToken) {
     const { credentials } = await oauth.refreshAccessToken();
-    await setTokens("gmail", {
+    const refreshed: StoredTokens = {
       accessToken: credentials.access_token ?? stored.accessToken,
       refreshToken: credentials.refresh_token ?? stored.refreshToken,
       expiresAt: credentials.expiry_date ?? undefined,
-    });
+      extra: stored.extra,
+    };
+    if (persist) await persist(refreshed);
   }
   return google.gmail({ version: "v1", auth: oauth });
 }
@@ -81,9 +95,13 @@ export type GmailMessageSummary = {
 };
 
 // List recent messages in the AP inbox that look like invoices (have attachments).
-export async function listInvoiceMessages(opts: { maxResults?: number; days?: number; query?: string } = {}): Promise<GmailMessageSummary[]> {
+// `client` lets the caller pass its own Gmail client (used by the firm-level
+// background poller). When omitted we fall back to the request-scoped client.
+export async function listInvoiceMessages(
+  opts: { maxResults?: number; days?: number; query?: string; client?: gmail_v1.Gmail } = {}
+): Promise<GmailMessageSummary[]> {
   const { maxResults = 25, days = 30, query } = opts;
-  const gmail = await getGmailClient();
+  const gmail = opts.client ?? (await getGmailClient());
   if (!gmail) throw new Error("Gmail is not connected.");
 
   // Default heuristic: invoice-flavored attachments only. We don't want to surface
@@ -170,16 +188,23 @@ export function listAttachmentParts(payload: gmail_v1.Schema$MessagePart | undef
 }
 
 // Returns { attachments, mimeType } for a message. Includes the actual attachment IDs needed to download.
-export async function getMessageAttachments(messageId: string): Promise<GmailAttachment[]> {
-  const gmail = await getGmailClient();
+export async function getMessageAttachments(
+  messageId: string,
+  client?: gmail_v1.Gmail
+): Promise<GmailAttachment[]> {
+  const gmail = client ?? (await getGmailClient());
   if (!gmail) throw new Error("Gmail is not connected.");
   const detail = await gmail.users.messages.get({ userId: "me", id: messageId, format: "full" });
   return listAttachmentParts(detail.data.payload);
 }
 
 // Downloads a single Gmail attachment as base64 (Gmail returns URL-safe base64 — convert to standard).
-export async function downloadAttachment(messageId: string, attachmentId: string): Promise<{ base64: string; bytes: number }> {
-  const gmail = await getGmailClient();
+export async function downloadAttachment(
+  messageId: string,
+  attachmentId: string,
+  client?: gmail_v1.Gmail
+): Promise<{ base64: string; bytes: number }> {
+  const gmail = client ?? (await getGmailClient());
   if (!gmail) throw new Error("Gmail is not connected.");
   const res = await gmail.users.messages.attachments.get({ userId: "me", messageId, id: attachmentId });
   const urlSafe = res.data.data ?? "";
@@ -187,4 +212,65 @@ export async function downloadAttachment(messageId: string, attachmentId: string
   const base64 = urlSafe.replace(/-/g, "+").replace(/_/g, "/");
   const bytes = res.data.size ?? 0;
   return { base64, bytes };
+}
+
+// ----------------- Push notifications (users.watch) -----------------
+
+// Begins a watch on a mailbox so Gmail will publish a notification to the
+// configured Pub/Sub topic on every mailbox change. Returns the historyId
+// that establishes the starting point for incremental sync.
+//
+// Topic format: "projects/<gcp-project>/topics/<topic-name>". Caller is
+// responsible for passing the right topic (read from env in the route).
+export async function startWatch(
+  client: gmail_v1.Gmail,
+  topicName: string,
+  labelIds: string[] = ["INBOX"]
+): Promise<{ historyId: string; expiration: number }> {
+  const res = await client.users.watch({
+    userId: "me",
+    requestBody: { topicName, labelIds, labelFilterBehavior: "INCLUDE" },
+  });
+  return {
+    historyId: String(res.data.historyId ?? ""),
+    expiration: Number(res.data.expiration ?? 0),
+  };
+}
+
+export async function stopWatch(client: gmail_v1.Gmail): Promise<void> {
+  await client.users.stop({ userId: "me" });
+}
+
+// Pulls all message IDs added since `startHistoryId`. Used by the Pub/Sub
+// webhook to discover what's new without fetching the whole inbox.
+export async function listHistorySinceId(
+  client: gmail_v1.Gmail,
+  startHistoryId: string
+): Promise<{ newMessageIds: string[]; latestHistoryId: string | null }> {
+  const ids = new Set<string>();
+  let pageToken: string | undefined;
+  let latest: string | null = startHistoryId;
+  do {
+    const res = await client.users.history.list({
+      userId: "me",
+      startHistoryId,
+      historyTypes: ["messageAdded"],
+      pageToken,
+    });
+    if (res.data.historyId) latest = String(res.data.historyId);
+    for (const h of res.data.history ?? []) {
+      for (const m of h.messagesAdded ?? []) {
+        if (m.message?.id) ids.add(m.message.id);
+      }
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return { newMessageIds: Array.from(ids), latestHistoryId: latest };
+}
+
+// Returns the user's primary email address — used to map a Pub/Sub
+// notification (which carries emailAddress) back to a `connections` row.
+export async function getProfileEmail(client: gmail_v1.Gmail): Promise<string | null> {
+  const res = await client.users.getProfile({ userId: "me" });
+  return res.data.emailAddress ?? null;
 }

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/queue/run", "schedule": "* * * * *" },
+    { "path": "/api/integrations/gmail/poll", "schedule": "*/5 * * * *" },
+    { "path": "/api/integrations/gmail/watch-renew", "schedule": "0 */12 * * *" }
+  ]
+}

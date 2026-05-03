@@ -115,3 +115,87 @@ After Supabase is up and migrations are run:
 
 If any step fails, check the Supabase dashboard logs and the Next.js server output —
 the auth helpers throw with descriptive messages.
+
+## 8. Gmail ingestion (firm-level + Pub/Sub Push)
+
+The bookkeeper connects ONE Gmail mailbox at the firm level. Inbound messages
+are routed to the right business by the worker reading off `processing_jobs`.
+
+### Required: queue + polling crons
+
+These run automatically on Vercel Cron (defined in `vercel.json`):
+
+- `POST /api/queue/run` — every minute. Drains a batch of pending jobs.
+- `POST /api/integrations/gmail/poll` — every 5 minutes. Fetches new
+  messages from every firm-level Gmail mailbox and enqueues routing.
+- `POST /api/integrations/gmail/watch-renew` — every 12h. Renews Gmail
+  Push watches before they expire (only useful once Pub/Sub is set up).
+
+To allow Vercel Cron to call them, set on Vercel:
+
+```
+CRON_SECRET=<long random string, e.g. openssl rand -hex 32>
+```
+
+Vercel will pass `Authorization: Bearer $CRON_SECRET` automatically.
+
+> **Vercel plan note:** minute-frequency crons require Pro plan. Hobby
+> plan supports daily crons. If you're on Hobby, lower the cadence in
+> `vercel.json` to `0 */1 * * *` (hourly) and accept the latency.
+
+### Optional but recommended: real-time Push notifications
+
+Without Push, the system relies on the 5-minute poller. With Push, Gmail
+notifies our webhook the moment a message lands in any connected mailbox
+(sub-second latency). Setup is one-time per environment.
+
+#### Step 1 — GCP Pub/Sub topic
+
+In your existing Google Cloud project (the one hosting the Gmail OAuth
+client):
+
+1. Enable the Pub/Sub API.
+2. **Pub/Sub → Topics → Create Topic** → name it `gmail-push`.
+3. **Permissions** on that topic → add member
+   `serviceAccount:gmail-api-push@system.gserviceaccount.com` with role
+   **Pub/Sub Publisher**. (This is the official Gmail service account that
+   publishes notifications.)
+4. **Pub/Sub → Subscriptions → Create Subscription** on the topic:
+   - Delivery type: **Push**
+   - Push endpoint: `https://app.payablepilot.com/api/integrations/gmail/push?secret=<your-shared-secret>`
+   - Acknowledgement deadline: 60s
+   - Authentication: optional. The shared secret in the URL is what we
+     verify against; you can also enable OIDC if you'd rather.
+
+#### Step 2 — env vars
+
+```
+GMAIL_PUBSUB_TOPIC=projects/<gcp-project-id>/topics/gmail-push
+GMAIL_PUSH_VERIFICATION_MODE=shared-secret
+GMAIL_PUSH_SHARED_SECRET=<long random string, same as in the push URL>
+```
+
+#### Step 3 — connect a firm-level mailbox
+
+When a bookkeeper hits `/api/integrations/gmail/firm-auth` and completes
+OAuth, the callback automatically calls `users.watch()` on the mailbox
+using the topic above. No further action needed; the renewal cron keeps
+the watch alive.
+
+#### Sanity check
+
+After connecting, send yourself a test email to the connected mailbox.
+Within ~5 seconds you should see:
+
+- A new row in `inbox_messages` (firm_id set, business_id null at first).
+- A `processing_jobs` row with type `process_inbound_email`.
+- After the next worker tick, `inbox_messages.business_id` is populated
+  if `sender_routes` had a matching entry — otherwise it stays as
+  `routing_status='unmatched'` for manual assignment.
+
+If nothing happens within 5 minutes, check:
+
+- Vercel Cron is firing (Project → Logs → Functions, filter by
+  `/api/integrations/gmail/poll`).
+- `gmail_sync_state.last_polled_at` is recent.
+- `processing_jobs.last_error` for any failed jobs.
