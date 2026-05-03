@@ -48,6 +48,10 @@ export function LandingPage() {
 // -------- Top nav --------
 
 function TopNav() {
+  // App lives on a separate subdomain in prod (app.payablepilot.com). In dev
+  // the env var is unset and we fall back to relative paths on the same host.
+  const appBase = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  const signInHref = `${appBase}/sign-in`;
   return (
     <header className="sticky top-0 z-40 bg-background/85 backdrop-blur border-b border-border">
       <div className="max-w-[1180px] mx-auto px-6 h-16 flex items-center">
@@ -64,6 +68,12 @@ function TopNav() {
           <a href="#safety" className="hover:text-foreground">Safety</a>
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          <a
+            href={signInHref}
+            className="inline-flex items-center gap-2 h-9 px-3 rounded-md text-sm font-medium text-foreground hover:bg-surface"
+          >
+            Sign in
+          </a>
           <a
             href="https://calendly.com/mofekayode/15min"
             target="_blank"
