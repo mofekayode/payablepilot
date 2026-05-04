@@ -294,8 +294,17 @@ export function BillsView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items.map((i) => `${i.id}:${i.qboVendorId ?? ""}:${i.vendorName ?? ""}:${i.invoiceNumber ?? ""}:${i.status}`).join("|")]);
 
-  const reviewable = items.filter((i) => i.status === "extracted" || i.status === "ready" || i.status === "error");
-  const posted = items.filter((i) => i.status === "posted");
+  // Sort newest-first by arrival time. The local store + merge logic
+  // doesn't guarantee stable ordering across hydrates (especially when
+  // local-only orphans land after DB rows), so we sort explicitly here.
+  const byCreatedDesc = (a: CapturedInvoice, b: CapturedInvoice) =>
+    (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
+  const byPostedDesc = (a: CapturedInvoice, b: CapturedInvoice) =>
+    (b.postedAt ?? b.createdAt ?? "").localeCompare(a.postedAt ?? a.createdAt ?? "");
+  const reviewable = items
+    .filter((i) => i.status === "extracted" || i.status === "ready" || i.status === "error")
+    .sort(byCreatedDesc);
+  const posted = items.filter((i) => i.status === "posted").sort(byPostedDesc);
 
   const post = async (it: CapturedInvoice) => {
     if (!it.qboVendorId) return;
