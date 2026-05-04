@@ -74,7 +74,6 @@ export function InboxLiveView({
   onNavigate: (v: LiveView) => void;
   activeBusinessId: string | null;
 }) {
-  void onNavigate;
   const [state, setState] = useState<State>({ kind: "idle" });
   const [openId, setOpenId] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -104,35 +103,65 @@ export function InboxLiveView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
-  // Realtime subscription: any INSERT or UPDATE on inbox_messages for the
-  // active business triggers a quick re-fetch. Push fills the DB; this
-  // makes the UI reflect that without a manual refresh.
+  // Realtime subscription. Pattern that works around the SSR auth race:
+  // explicitly fetch the session and call realtime.setAuth BEFORE we
+  // create the channel — otherwise the first subscription opens with
+  // the anon JWT, RLS rejects every event, and we get a quiet socket.
   useEffect(() => {
     if (!activeBusinessId) return;
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`inbox-${activeBusinessId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "inbox_messages",
-          filter: `business_id=eq.${activeBusinessId}`,
-        },
-        (payload) => {
-          console.log("[inbox] realtime event", payload.eventType, payload.new);
-          fetchInbox({ silent: true });
-        }
-      )
-      .subscribe((status, err) => {
-        console.log("[inbox] realtime status:", status, err ?? "");
-      });
+    let cleanup: (() => void) | null = null;
+    let cancelled = false;
+
+    (async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { data } = await supabase.auth.getSession();
+      if (cancelled) return;
+      if (data.session?.access_token) {
+        await supabase.realtime.setAuth(data.session.access_token);
+      }
+      if (cancelled) return;
+      const channel = supabase
+        .channel(`inbox-${activeBusinessId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "inbox_messages",
+            filter: `business_id=eq.${activeBusinessId}`,
+          },
+          (payload) => {
+            console.log("[inbox] realtime event", payload.eventType, payload.new);
+            fetchInbox({ silent: true });
+          }
+        )
+        .subscribe((status, err) => {
+          console.log("[inbox] realtime status:", status, err ?? "");
+        });
+      cleanup = () => {
+        supabase.removeChannel(channel);
+      };
+    })();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      if (cleanup) cleanup();
     };
   }, [activeBusinessId, fetchInbox]);
+
+  // Belt-and-braces fallback: even with realtime, refresh on a 30s
+  // timer and whenever the tab regains focus. This guarantees the UI
+  // updates within at most 30s if realtime has a hiccup, and matches
+  // the user's mental model of "open the tab, see the latest."
+  useEffect(() => {
+    const t = setInterval(() => fetchInbox({ silent: true }), 30_000);
+    const onFocus = () => fetchInbox({ silent: true });
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchInbox]);
 
   const messages = state.kind === "ready" ? state.messages : [];
   const open = messages.find((m) => m.id === openId) ?? null;
@@ -246,7 +275,10 @@ export function InboxLiveView({
         onClose={() => setUploadOpen(false)}
         onUploaded={() => {
           setUploadOpen(false);
-          fetchInbox();
+          // The upload modal's "Open bills queue" button calls this —
+          // honor that intent and switch to the Bills tab where the
+          // newly uploaded invoice now lives.
+          onNavigate("bills");
         }}
       />
     </div>
