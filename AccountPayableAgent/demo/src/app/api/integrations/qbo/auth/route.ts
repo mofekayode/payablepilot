@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
     const businessId = await requireActiveBusinessId();
     const state = randomBytes(16).toString("hex");
     const returnTo = resolveReturnTo(req);
-    const url = authUrl(state);
+    const url = await authUrl(state);
     const res = NextResponse.redirect(url);
     const opts = {
       httpOnly: true,

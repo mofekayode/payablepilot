@@ -5,8 +5,59 @@
 import { getTokens, setTokens, type StoredTokens } from "./tokens";
 
 const SCOPES = ["com.intuit.quickbooks.accounting"];
-const AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
-const TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+
+// Intuit's OAuth 2.0 / OpenID Connect discovery document. Best practice
+// (and explicitly requested in Intuit's production-app review) is to
+// resolve the OAuth endpoints from this document rather than hardcoding
+// them — that way Intuit can rotate URLs without breaking integrations.
+//
+// We cache the resolved endpoints in-process for 24 hours and fall back
+// to the well-known hardcoded values if the discovery fetch fails (so a
+// transient network issue can't take token exchange offline).
+const DISCOVERY_URL =
+  "https://developer.api.intuit.com/.well-known/openid_configuration";
+const FALLBACK_AUTH_URL = "https://appcenter.intuit.com/connect/oauth2";
+const FALLBACK_TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+const DISCOVERY_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+let discoveryCache: { authUrl: string; tokenUrl: string; fetchedAt: number } | null = null;
+
+async function resolveOAuthEndpoints(): Promise<{ authUrl: string; tokenUrl: string }> {
+  const now = Date.now();
+  if (discoveryCache && now - discoveryCache.fetchedAt < DISCOVERY_TTL_MS) {
+    return { authUrl: discoveryCache.authUrl, tokenUrl: discoveryCache.tokenUrl };
+  }
+  try {
+    const res = await fetch(DISCOVERY_URL, {
+      headers: { Accept: "application/json" },
+      // Don't let a hung discovery call block OAuth indefinitely.
+      signal: AbortSignal.timeout(5000),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        authorization_endpoint?: string;
+        token_endpoint?: string;
+      };
+      if (data.authorization_endpoint && data.token_endpoint) {
+        discoveryCache = {
+          authUrl: data.authorization_endpoint,
+          tokenUrl: data.token_endpoint,
+          fetchedAt: now,
+        };
+        return { authUrl: discoveryCache.authUrl, tokenUrl: discoveryCache.tokenUrl };
+      }
+    }
+    console.warn(
+      `[qbo] discovery document missing endpoints (${res.status}); using fallback URLs`
+    );
+  } catch (e) {
+    console.warn(
+      "[qbo] discovery document fetch failed, using fallback URLs:",
+      (e as Error).message
+    );
+  }
+  return { authUrl: FALLBACK_AUTH_URL, tokenUrl: FALLBACK_TOKEN_URL };
+}
 
 function requireEnv(): { clientId: string; clientSecret: string; redirectUri: string; apiBase: string } {
   const clientId = process.env.QBO_CLIENT_ID;
@@ -25,8 +76,9 @@ function requireEnv(): { clientId: string; clientSecret: string; redirectUri: st
   return { clientId, clientSecret, redirectUri, apiBase };
 }
 
-export function authUrl(state: string): string {
+export async function authUrl(state: string): Promise<string> {
   const { clientId, redirectUri } = requireEnv();
+  const { authUrl: oauthBase } = await resolveOAuthEndpoints();
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
@@ -34,13 +86,14 @@ export function authUrl(state: string): string {
     redirect_uri: redirectUri,
     state,
   });
-  return `${AUTH_URL}?${params.toString()}`;
+  return `${oauthBase}?${params.toString()}`;
 }
 
 export async function exchangeCode(code: string, realmId: string): Promise<StoredTokens> {
   const { clientId, clientSecret, redirectUri } = requireEnv();
+  const { tokenUrl } = await resolveOAuthEndpoints();
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basic}`,
@@ -67,8 +120,9 @@ async function refreshIfNeeded(stored: StoredTokens): Promise<StoredTokens> {
   if (!stored.expiresAt || stored.expiresAt - 60_000 > Date.now()) return stored;
   if (!stored.refreshToken) return stored;
   const { clientId, clientSecret } = requireEnv();
+  const { tokenUrl } = await resolveOAuthEndpoints();
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basic}`,
