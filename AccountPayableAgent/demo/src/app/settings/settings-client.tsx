@@ -375,6 +375,7 @@ function FlashBanner({ flash }: { flash: Flash }) {
   if (flash.gmail === "connected") messages.push({ tone: "ok", text: "Gmail connected." });
   if (flash.gmail === "error") messages.push({ tone: "err", text: `Gmail connection failed${flash.reason ? `: ${decodeURIComponent(flash.reason)}` : ""}.` });
   if (flash.qbo === "connected") messages.push({ tone: "ok", text: "QuickBooks connected." });
+  if (flash.qbo === "disconnected") messages.push({ tone: "ok", text: "QuickBooks disconnected. You can reconnect any time from this page." });
   if (flash.qbo === "error") messages.push({ tone: "err", text: `QuickBooks connection failed${flash.reason ? `: ${decodeURIComponent(flash.reason)}` : ""}.` });
   if (messages.length === 0) return null;
   return (
