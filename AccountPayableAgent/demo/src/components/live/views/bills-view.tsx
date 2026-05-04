@@ -45,6 +45,11 @@ export function BillsView({
   const [refreshKey, setRefreshKey] = useState(0);
   const [posting, setPosting] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  // Tracks whether the first DB hydrate has finished. Until then we
+  // render a loading state instead of the empty-queue placeholder, so
+  // the user doesn't see "Nothing in the queue" flash on top of bills
+  // that are about to load.
+  const [hydrated, setHydrated] = useState(false);
 
   // Load captured + listen for changes elsewhere in the app.
   // First hydrate from /api/bills (DB source of truth), then read
@@ -57,7 +62,10 @@ export function BillsView({
     }
     let cancelled = false;
     hydrateFromDb().then(() => {
-      if (!cancelled) refresh();
+      if (!cancelled) {
+        refresh();
+        setHydrated(true);
+      }
     });
     window.addEventListener("pp:captured:changed", refresh);
     return () => {
@@ -366,7 +374,14 @@ export function BillsView({
         </div>
         <UploadInvoiceModalLive open={uploadOpen} onClose={() => setUploadOpen(false)} onUploaded={() => onNavigate("bills")} />
 
-        {reviewable.length === 0 && (
+        {!hydrated && reviewable.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border bg-background p-10 text-center">
+            <Loader2 className="w-5 h-5 animate-spin text-muted mx-auto mb-2" />
+            <div className="text-[13px] text-muted">Loading bills…</div>
+          </div>
+        )}
+
+        {hydrated && reviewable.length === 0 && (
           <div className="rounded-xl border border-dashed border-border bg-background p-10 text-center">
             <div className="text-[15px] font-medium mb-1">Nothing in the queue.</div>
             <div className="text-[13px] text-muted max-w-md mx-auto">
