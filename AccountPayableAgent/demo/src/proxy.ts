@@ -34,7 +34,10 @@ const APP_ONLY_PREFIXES = [
 function appOriginFromHost(host: string): string | null {
   // Strip a leading "app." if present so we can construct the sibling host.
   const lower = host.toLowerCase();
-  const bareHost = lower.startsWith("app.") ? lower.slice(4) : lower;
+  let bareHost = lower.startsWith("app.") ? lower.slice(4) : lower;
+  // Also strip a leading "www." — otherwise visiting www.payablepilot.com
+  // would redirect to app.www.payablepilot.com, which doesn't resolve.
+  if (bareHost.startsWith("www.")) bareHost = bareHost.slice(4);
   // Skip host-splitting for localhost / IP addresses / single-label hosts.
   if (!bareHost.includes(".") || bareHost.startsWith("localhost") || /^\d+\./.test(bareHost)) {
     return null;
