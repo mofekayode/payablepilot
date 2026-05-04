@@ -1,80 +1,277 @@
-export const metadata = { title: "PayablePilot · Privacy" };
+export const metadata = { title: "PayablePilot · Privacy Policy" };
 
 export default function PrivacyPage() {
+  const lastUpdated = new Date().toISOString().slice(0, 10);
+
   return (
     <>
       <h1 className="text-[28px] font-semibold tracking-tight">Privacy Policy</h1>
-      <p className="text-[12px] text-neutral-500">Last updated: {new Date().toISOString().slice(0, 10)}</p>
-      <p className="text-[14px] text-neutral-500 mt-2">
-        <strong>Draft.</strong> This is a working version. A lawyer-reviewed version will replace it before
-        general availability.
+      <p className="text-[12px] text-neutral-500">Last updated: {lastUpdated}</p>
+
+      <p className="text-[14px] mt-4">
+        This Privacy Policy explains how PayablePilot (&ldquo;PayablePilot,&rdquo; &ldquo;we,&rdquo;
+        &ldquo;us,&rdquo; or &ldquo;our&rdquo;) collects, uses, discloses, and protects information when you
+        use the PayablePilot service available through{" "}
+        <a href="https://payablepilot.com">payablepilot.com</a> and{" "}
+        <a href="https://app.payablepilot.com">app.payablepilot.com</a> (the &ldquo;Service&rdquo;). It also
+        describes your choices and rights regarding that information. By using the Service, you agree to the
+        practices described here.
       </p>
 
-      <h2>What we collect</h2>
-      <p>
-        We collect (a) account information you give us — your name, email, and the businesses you manage; (b)
-        OAuth tokens you authorize for Gmail and QuickBooks Online so we can read invoices and post bills on
-        your behalf; (c) the contents of invoice emails and attachments forwarded into PayablePilot, and the
-        structured fields we extract from them; and (d) standard server logs and usage analytics.
-      </p>
+      <h2>1. Information we collect</h2>
 
-      <h2>How we use it</h2>
-      <p>
-        We use the data above only to operate PayablePilot for you: extracting invoice fields, matching them to
-        vendors and bills, posting to your accounting system, and sending you reminders or summaries. We do not
-        sell your data and we do not use the contents of your invoices to train any third-party AI model
-        except as needed to answer your own queries through PayablePilot.
-      </p>
-
-      <h2>Who can see it</h2>
-      <p>
-        Inside PayablePilot, business data is partitioned by client and access is enforced at the database
-        level (Postgres row-level security). Only members of a business — or members of the bookkeeping firm
-        managing that business — can read its invoices, bills, and connections.
-      </p>
-
-      <h2>Subprocessors</h2>
-      <p>
-        We rely on the following service providers to operate PayablePilot. Each receives only the data
-        strictly necessary to perform its function:
-      </p>
+      <h3>1.1 Information you provide</h3>
       <ul>
         <li>
-          <strong>Supabase</strong> — database hosting, authentication, and file storage.
+          <strong>Account information:</strong> name, email address, password (stored as a salted hash),
+          firm name, and business profile details (legal name, DBA, EIN, addresses) you choose to enter.
         </li>
         <li>
-          <strong>Anthropic</strong> — invoice field extraction (Claude API). Only the document being processed is
-          sent; we do not include other client data in the prompt.
+          <strong>Team and access information:</strong> the people you invite to a Firm or to a Business and
+          the roles you assign to them.
         </li>
         <li>
-          <strong>Vercel</strong> — application hosting.
-        </li>
-        <li>
-          <strong>Google</strong> — Gmail OAuth (read-only access to mailboxes you connect).
-        </li>
-        <li>
-          <strong>Intuit</strong> — QuickBooks Online OAuth and API.
+          <strong>Support communications:</strong> messages you send to{" "}
+          <a href="mailto:support@payablepilot.com">support@payablepilot.com</a> and any attachments you
+          include.
         </li>
       </ul>
 
-      <h2>Retention &amp; deletion</h2>
+      <h3>1.2 Information collected from connected accounts</h3>
       <p>
-        You can disconnect Gmail or QuickBooks at any time from Settings; we delete the associated OAuth
-        tokens immediately. To delete your account or any individual business and its data, email{" "}
-        <a href="mailto:support@payablepilot.com">support@payablepilot.com</a>. Deletion is final and we will
-        confirm completion within 7 days.
+        When you authorize PayablePilot to access a third-party account (e.g., Gmail, QuickBooks Online),
+        we collect:
+      </p>
+      <ul>
+        <li>
+          <strong>OAuth tokens</strong> issued by the provider, used solely to access the resources you
+          authorized. We never see your password for the connected service.
+        </li>
+        <li>
+          <strong>From Gmail (read-only):</strong> message metadata (sender, recipient, subject, date) and
+          message content of emails identified as containing invoices or invoice-bearing attachments.
+          Attachments are downloaded and stored only when they appear to be invoice documents (PDFs,
+          images). We do not modify, send, or delete mail.
+        </li>
+        <li>
+          <strong>From QuickBooks Online:</strong> reference data (vendors, projects, customers, chart of
+          accounts) needed to match and post bills, plus the bills we create on your authorization.
+        </li>
+      </ul>
+
+      <h3>1.3 Information generated by the Service</h3>
+      <ul>
+        <li>
+          <strong>Extracted invoice fields:</strong> structured data the Service extracts from invoice
+          documents (vendor, amount, line items, dates, project references, etc.).
+        </li>
+        <li>
+          <strong>Routing decisions and audit log:</strong> records of which Business an invoice was routed
+          to, who connected what, when bills were posted, and similar audit trail data.
+        </li>
+        <li>
+          <strong>Server logs and usage analytics:</strong> IP addresses, device and browser metadata,
+          requests and response codes, and feature usage events. These are used for security, debugging,
+          and improving the Service.
+        </li>
+      </ul>
+
+      <h2>2. How we use information</h2>
+      <p>We use the information described above only to:</p>
+      <ul>
+        <li>
+          Operate the Service for you: ingest invoices, extract fields, match against your accounting
+          records, route to the right Business, and post bills you authorize;
+        </li>
+        <li>Authenticate you and protect your account from unauthorized access;</li>
+        <li>Communicate with you about the Service, including security notices and product updates;</li>
+        <li>Maintain, troubleshoot, and improve the Service;</li>
+        <li>Comply with legal obligations, enforce our Terms, or protect our rights and the rights of others.</li>
+      </ul>
+
+      <p>
+        We do not sell or rent your personal information. We do not use the contents of your invoices,
+        emails, or accounting data to train any AI model (ours or a third party&rsquo;s).
       </p>
 
-      <h2>Security</h2>
+      <h2>3. Google API Services User Data Policy</h2>
       <p>
-        Tokens and credentials are stored encrypted at rest in our database. All traffic to and from
-        PayablePilot is encrypted in transit (TLS). Access to production systems is limited to the founder
-        and is logged.
+        PayablePilot&rsquo;s use and transfer of information received from Google APIs adheres to the{" "}
+        <a
+          href="https://developers.google.com/terms/api-services-user-data-policy"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Google API Services User Data Policy
+        </a>
+        , including the Limited Use requirements. Specifically, data obtained through Google APIs is used
+        only to provide or improve user-facing features that are prominent in PayablePilot&rsquo;s user
+        interface, is not transferred to others except as necessary to provide or improve those features
+        (or as required by law), is not used for serving advertisements, and is not read by humans except
+        with your explicit consent, for security purposes, to comply with law, or for our internal
+        operations and only when the data has been aggregated and anonymized.
       </p>
 
-      <h2>Contact</h2>
+      <h2>4. How we share information</h2>
+      <p>We share information only as needed to operate the Service:</p>
+      <ul>
+        <li>
+          <strong>With users you authorize:</strong> teammates of your Firm and members of a Business that
+          you invite. Access is enforced at the database level (Postgres row-level security) so a user can
+          only read data for the Businesses they are members of, or that their Firm manages.
+        </li>
+        <li>
+          <strong>With subprocessors</strong> listed in Section 5, who process information on our behalf
+          and under contract.
+        </li>
+        <li>
+          <strong>For legal reasons:</strong> if required by valid legal process, to protect our rights, or
+          to investigate fraud or violations of our Terms.
+        </li>
+        <li>
+          <strong>In connection with a business transaction:</strong> if PayablePilot is acquired or
+          undergoes a merger, your information may be transferred as part of that transaction. We will
+          notify you and require the recipient to honor this Privacy Policy or provide notice of any
+          changes.
+        </li>
+      </ul>
+
+      <h2>5. Subprocessors</h2>
       <p>
-        Questions: <a href="mailto:support@payablepilot.com">support@payablepilot.com</a>.
+        We rely on the following third-party service providers to operate the Service. Each receives only
+        the data strictly necessary to perform its function and is bound by contractual confidentiality,
+        security, and data-handling obligations:
+      </p>
+      <ul>
+        <li>
+          <strong>Supabase</strong> &mdash; database, authentication, and file storage. Hosts Customer
+          Data at rest with AES-256 encryption.
+        </li>
+        <li>
+          <strong>Vercel</strong> &mdash; application hosting and edge delivery.
+        </li>
+        <li>
+          <strong>Anthropic</strong> &mdash; AI-driven invoice field extraction (Claude API). Only the
+          specific invoice document being processed is transmitted. Per Anthropic&rsquo;s API terms,
+          submitted data is not used to train Anthropic&rsquo;s models.
+        </li>
+        <li>
+          <strong>Google (Gmail API)</strong> &mdash; read-only access to mailboxes you connect, used to
+          retrieve invoice emails. Subject to Google&rsquo;s API Services User Data Policy (Section 3).
+        </li>
+        <li>
+          <strong>Intuit (QuickBooks Online)</strong> &mdash; OAuth connection used to read accounting
+          reference data and create bills you authorize.
+        </li>
+      </ul>
+      <p>
+        We will update this list when subprocessors are added or removed, and material changes will be
+        announced before they take effect.
+      </p>
+
+      <h2>6. Security</h2>
+      <p>
+        We protect your information with administrative, technical, and physical safeguards designed for
+        the kind of data we handle:
+      </p>
+      <ul>
+        <li>
+          <strong>Encryption in transit:</strong> all traffic between you, our hosting provider, and our
+          database is secured with TLS.
+        </li>
+        <li>
+          <strong>Encryption at rest:</strong> data stored in our database is encrypted at rest (AES-256)
+          by Supabase.
+        </li>
+        <li>
+          <strong>Tenant isolation:</strong> Postgres row-level security policies enforce per-Business
+          access. Tokens for connected accounts are scoped per Firm or per Business and never exposed to
+          the browser.
+        </li>
+        <li>
+          <strong>Access controls:</strong> production access is limited to authorized personnel,
+          authentication uses multi-factor authentication, and all administrative actions are audit-logged.
+        </li>
+        <li>
+          <strong>Secure development:</strong> dependencies are scanned for known vulnerabilities and
+          deployments are continuously delivered through a managed CI pipeline.
+        </li>
+      </ul>
+      <p>
+        No system can guarantee absolute security. If we become aware of a breach affecting your data, we
+        will notify you and any required authorities consistent with applicable law.
+      </p>
+
+      <h2>7. Retention and deletion</h2>
+      <p>
+        We retain Customer Data for as long as your account is active or as needed to provide the Service.
+        You can take the following actions at any time:
+      </p>
+      <ul>
+        <li>
+          <strong>Disconnect a connected account</strong> from the Settings page. We delete the associated
+          OAuth tokens immediately and stop ingesting from that source.
+        </li>
+        <li>
+          <strong>Delete a Business</strong> from the Service. Associated invoice data, bills, and audit
+          entries scoped to that Business are deleted within 30 days.
+        </li>
+        <li>
+          <strong>Delete your account</strong> by emailing{" "}
+          <a href="mailto:support@payablepilot.com">support@payablepilot.com</a>. We will confirm
+          completion within 7 days. Backups are purged on our standard rolling backup schedule (no longer
+          than 30 days).
+        </li>
+      </ul>
+      <p>
+        We may retain limited information required for legal, accounting, or fraud-prevention purposes
+        even after deletion, in line with applicable law.
+      </p>
+
+      <h2>8. Your rights and choices</h2>
+      <p>
+        Depending on where you live, you may have rights under data-protection laws including the EU
+        General Data Protection Regulation (GDPR), the California Consumer Privacy Act / California Privacy
+        Rights Act (CCPA / CPRA), and similar regulations. These can include the right to access, correct,
+        delete, restrict, or port your personal information, and to object to certain processing. To
+        exercise any of these rights, contact{" "}
+        <a href="mailto:support@payablepilot.com">support@payablepilot.com</a>. We will respond within the
+        timeframes required by applicable law.
+      </p>
+      <p>
+        We do not sell personal information and do not engage in &ldquo;cross-context behavioral
+        advertising&rdquo; as defined under the CCPA / CPRA.
+      </p>
+
+      <h2>9. International data transfers</h2>
+      <p>
+        PayablePilot is operated from the United States. If you access the Service from outside the United
+        States, your information will be transferred to, processed, and stored in the United States. By
+        using the Service you consent to that transfer. Where required, we rely on appropriate safeguards
+        such as the Standard Contractual Clauses for cross-border data transfers.
+      </p>
+
+      <h2>10. Children</h2>
+      <p>
+        The Service is not directed to children under 16, and we do not knowingly collect personal
+        information from anyone under 16. If you believe a child has provided us with personal information,
+        contact us and we will delete it.
+      </p>
+
+      <h2>11. Changes to this policy</h2>
+      <p>
+        We may update this Privacy Policy from time to time. For material changes, we will provide notice
+        by email to the address associated with your account or by an in-app notice at least 15 days
+        before the changes take effect. The &ldquo;Last updated&rdquo; date at the top of this page
+        reflects the latest revision.
+      </p>
+
+      <h2>12. Contact</h2>
+      <p>
+        Questions, concerns, or requests about your data? Contact us at{" "}
+        <a href="mailto:support@payablepilot.com">support@payablepilot.com</a>. For data-protection
+        inquiries specifically, please put &ldquo;Privacy&rdquo; in the subject line so we can route it
+        promptly.
       </p>
     </>
   );
